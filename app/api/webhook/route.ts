@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
+import crypto from "crypto"
 
-const VERIFY_TOKEN = "whatsapp_webhook_token"
+const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || "whatsapp_webhook_token"
+const APP_SECRET = process.env.WHATSAPP_APP_SECRET || ""
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -10,7 +12,8 @@ export async function GET(request: NextRequest) {
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("Webhook verified")
-    return NextResponse.json(challenge)
+    // Return plain text challenge value, not JSON
+    return new NextResponse(challenge, { status: 200 })
   }
 
   return NextResponse.json({ error: "Invalid token" }, { status: 400 })
@@ -18,7 +21,36 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
+    // Get the raw body for signature validation
+    const rawBody = await request.text()
+
+    // Validate X-Hub-Signature-256
+    const signature = request.headers.get("X-Hub-Signature-256")
+
+    if (!signature) {
+      console.error("Missing X-Hub-Signature-256 header")
+      return NextResponse.json({ error: "Missing signature" }, { status: 401 })
+    }
+
+    // Verify the signature
+    if (APP_SECRET) {
+      const expectedSignature = crypto
+        .createHmac("sha256", APP_SECRET)
+        .update(rawBody)
+        .digest("hex")
+
+      const signatureHash = signature.replace("sha256=", "")
+
+      if (signatureHash !== expectedSignature) {
+        console.error("Invalid signature")
+        return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+      }
+    } else {
+      console.warn("WHATSAPP_APP_SECRET not configured - skipping signature validation")
+    }
+
+    // Parse the validated body
+    const body = JSON.parse(rawBody)
 
     // Log incoming webhook for debugging
     console.log("Webhook received:", JSON.stringify(body, null, 2))
