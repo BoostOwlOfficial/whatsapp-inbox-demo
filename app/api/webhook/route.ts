@@ -86,7 +86,14 @@ export async function POST(request: NextRequest) {
 
               // Save to Supabase
               try {
-                const { supabase } = await import("@/lib/supabase")
+                const { supabase, isSupabaseConfigured } = await import("@/lib/supabase")
+
+                // Only save if Supabase is configured
+                if (!isSupabaseConfigured()) {
+                  console.warn("Supabase not configured, skipping message storage")
+                  continue
+                }
+
                 const messageData = {
                   id: message.id,
                   phone_number_id: metadata.phone_number_id,
@@ -130,7 +137,14 @@ export async function POST(request: NextRequest) {
               })
 
               try {
-                const { supabase } = await import("@/lib/supabase")
+                const { supabase, isSupabaseConfigured } = await import("@/lib/supabase")
+
+                // Only update if Supabase is configured
+                if (!isSupabaseConfigured()) {
+                  console.warn("Supabase not configured, skipping status update")
+                  continue
+                }
+
                 const { error } = await supabase
                   .from("whatsapp_messages")
                   .update({ status: status.status })

@@ -1,8 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
     try {
+        // Check if Supabase is configured at runtime
+        if (!isSupabaseConfigured()) {
+            console.warn("Supabase not configured, returning empty messages array")
+            return NextResponse.json({ messages: [] })
+        }
+
         const searchParams = request.nextUrl.searchParams
         const phoneNumberId = searchParams.get("phoneNumberId")
         const fromNumber = searchParams.get("fromNumber")
