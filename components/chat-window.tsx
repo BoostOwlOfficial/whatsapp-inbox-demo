@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Send, CheckCheck, Clock, AlertCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, formatToIST } from "@/lib/utils"
 
 interface ChatWindowProps {
   conversation: any
@@ -26,11 +26,6 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
     }
   }
 
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })
-  }
-
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "sent":
@@ -49,8 +44,12 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
       {/* Chat Header */}
       <div className="border-b border-border bg-card px-6 py-4">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">{conversation.recipientPhone}</h2>
-          <p className="text-xs text-muted-foreground">From: {conversation.senderPhone}</p>
+          <h2 className="text-lg font-semibold text-foreground">
+            {conversation.contactName || conversation.recipientPhone}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {conversation.contactName ? conversation.recipientPhone : `From: ${conversation.senderPhone}`}
+          </p>
         </div>
       </div>
 
@@ -79,7 +78,7 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
                     msg.from === conversation.senderPhone ? "text-green-100" : "text-muted-foreground",
                   )}
                 >
-                  <span>{formatTime(msg.timestamp)}</span>
+                  <span>{formatToIST(msg.timestamp, 'short')}</span>
                   {msg.from === conversation.senderPhone && getStatusIcon(msg.status)}
                 </div>
               </div>

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Plus, MessageCircle } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn, getRelativeTime } from "@/lib/utils"
 
 interface ConversationListProps {
   conversations: any[]
@@ -73,31 +73,48 @@ export function ConversationList({
             <p className="text-sm text-muted-foreground">No conversations yet</p>
           </div>
         ) : (
-          conversations.map((conv) => (
-            <button
-              key={conv.id}
-              onClick={() => onSelectConversation(conv.id)}
-              className={cn(
-                "w-full text-left px-4 py-3 border-b border-border transition-colors hover:bg-muted",
-                selectedConversation === conv.id && "bg-muted",
-              )}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <MessageCircle className="h-4 w-4 text-green-600" />
-                <p className="font-medium text-foreground truncate">
-                  {conv.contactName || conv.recipientPhone}
-                </p>
-              </div>
-              {conv.messages.length > 0 && (
-                <>
-                  <p className="text-xs text-muted-foreground truncate">{conv.messages[conv.messages.length - 1].text}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {new Date(conv.messages[conv.messages.length - 1].timestamp * 1000).toLocaleString()}
+          conversations.map((conv) => {
+            const lastMessage = conv.messages[conv.messages.length - 1]
+            const displayName = conv.contactName || conv.recipientPhone
+            const showPhoneNumber = conv.contactName && conv.contactName !== conv.recipientPhone
+
+            return (
+              <button
+                key={conv.id}
+                onClick={() => onSelectConversation(conv.id)}
+                className={cn(
+                  "w-full text-left px-4 py-3 border-b border-border transition-colors hover:bg-muted",
+                  selectedConversation === conv.id && "bg-muted",
+                )}
+              >
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <MessageCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">
+                        {displayName}
+                      </p>
+                      {showPhoneNumber && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {conv.recipientPhone}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {lastMessage && (
+                    <span className="text-xs text-muted-foreground flex-shrink-0">
+                      {getRelativeTime(lastMessage.timestamp)}
+                    </span>
+                  )}
+                </div>
+                {lastMessage && (
+                  <p className="text-xs text-muted-foreground truncate ml-6">
+                    {lastMessage.text}
                   </p>
-                </>
-              )}
-            </button>
-          ))
+                )}
+              </button>
+            )
+          })
         )}
       </div>
     </div>
