@@ -58,13 +58,24 @@ export async function POST(request: NextRequest) {
     // Process webhook data
     if (body.object === "whatsapp_business_account") {
       body.entry?.forEach((entry: any) => {
-        entry.changes?.forEach((change: any) => {
+        entry.changes?.forEach(async (change: any) => {
           if (change.field === "messages") {
             const messages = change.value?.messages || []
             const contacts = change.value?.contacts || []
             const metadata = change.value?.metadata || {}
 
-            messages.forEach((message: any) => {
+            // Create a map of contact info for quick lookup
+            const contactMap = new Map(
+              contacts.map((contact: any) => [
+                contact.wa_id,
+                contact.profile?.name || null
+              ])
+            )
+
+            // Save each message to Supabase
+            for (const message of messages) {
+              const contactName = contactMap.get(message.from)
+
               console.log("New message received:", {
                 from: message.from,
                 to: metadata.display_phone_number,
@@ -73,20 +84,67 @@ export async function POST(request: NextRequest) {
                 timestamp: message.timestamp,
               })
 
-              // Here you could store the message in your database
-              // or trigger other actions based on the incoming message
-            })
+              // Save to Supabase
+              try {
+                const { supabase } = await import("@/lib/supabase")
+                const messageData = {
+                  id: message.id,
+                  phone_number_id: metadata.phone_number_id,
+                  from_number: message.from,
+                  to_number: metadata.display_phone_number,
+                  contact_name: contactName,
+                  message_type: message.type,
+                  message_text: message.text?.body || null,
+                  timestamp: parseInt(message.timestamp),
+                  status: "received" as const,
+                  metadata: {
+                    ...metadata,
+                    raw_message: message,
+                  },
+                }
+
+                const { error } = await supabase
+                  .from("whatsapp_messages")
+                  .insert(messageData)
+
+                if (error) {
+                  console.error("Error saving message to Supabase:", error)
+                } else {
+                  console.log("Message saved to Supabase:", message.id)
+                }
+              } catch (error) {
+                console.error("Failed to save message to Supabase:", error)
+              }
+            }
           }
 
           if (change.field === "message_status") {
             const statuses = change.value?.statuses || []
-            statuses.forEach((status: any) => {
+
+            // Update message status in Supabase
+            for (const status of statuses) {
               console.log("Message status update:", {
                 messageId: status.id,
                 status: status.status,
                 timestamp: status.timestamp,
               })
-            })
+
+              try {
+                const { supabase } = await import("@/lib/supabase")
+                const { error } = await supabase
+                  .from("whatsapp_messages")
+                  .update({ status: status.status })
+                  .eq("id", status.id)
+
+                if (error) {
+                  console.error("Error updating message status:", error)
+                } else {
+                  console.log("Message status updated:", status.id)
+                }
+              } catch (error) {
+                console.error("Failed to update message status:", error)
+              }
+            }
           }
         })
       })

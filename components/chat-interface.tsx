@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useSettings } from "@/lib/settings-context"
+import { useMessages } from "@/hooks/use-messages"
 import { ConversationList } from "./conversation-list"
 import { ChatWindow } from "./chat-window"
 import { PhoneSelector } from "./phone-selector"
@@ -14,6 +15,13 @@ export function ChatInterface() {
   const [phoneNumbers, setPhoneNumbers] = useState<any[]>([])
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null)
   const [conversations, setConversations] = useState<Map<string, any>>(new Map())
+
+  // Poll for new messages from Supabase
+  const { messages: supabaseMessages } = useMessages({
+    phoneNumberId: selectedPhoneId,
+    enabled: !!selectedPhoneId,
+    pollingInterval: 5000, // Poll every 5 seconds
+  })
 
   useEffect(() => {
     const saved = localStorage.getItem("whatsapp_phone_numbers")
@@ -37,6 +45,59 @@ export function ChatInterface() {
       localStorage.setItem("whatsapp_conversations", JSON.stringify(Array.from(conversations.entries())))
     }
   }, [conversations])
+
+  // Merge Supabase messages into conversations
+  useEffect(() => {
+    if (!supabaseMessages || supabaseMessages.length === 0) return
+
+    const updatedConversations = new Map(conversations)
+    const currentPhone = phoneNumbers.find((p) => p.id === selectedPhoneId)
+
+    if (!currentPhone) return
+
+    supabaseMessages.forEach((msg) => {
+      // Determine conversation ID based on message direction
+      const isIncoming = msg.from_number !== currentPhone.display_phone_number
+      const recipientPhone = isIncoming ? msg.from_number : msg.to_number || ""
+      const convId = `${selectedPhoneId}-${recipientPhone}`
+
+      // Get or create conversation
+      let conv = updatedConversations.get(convId)
+      if (!conv) {
+        conv = {
+          id: convId,
+          recipientPhone,
+          messages: [],
+          senderPhone: currentPhone.display_phone_number,
+          createdAt: new Date(msg.created_at || Date.now()).toISOString(),
+          contactName: msg.contact_name,
+        }
+      }
+
+      // Check if message already exists (deduplicate by ID)
+      const messageExists = conv.messages.some((m: any) => m.id === msg.id)
+      if (!messageExists) {
+        // Convert Supabase message to local format
+        const localMsg = {
+          id: msg.id,
+          from: msg.from_number,
+          to: msg.to_number || "",
+          text: msg.message_text || "",
+          timestamp: msg.timestamp,
+          status: msg.status,
+          type: msg.message_type,
+        }
+        conv.messages.push(localMsg)
+        // Sort messages by timestamp
+        conv.messages.sort((a: any, b: any) => a.timestamp - b.timestamp)
+      }
+
+      updatedConversations.set(convId, conv)
+    })
+
+    setConversations(updatedConversations)
+  }, [supabaseMessages, selectedPhoneId, phoneNumbers])
+
 
   const handleSelectPhone = (phoneId: string) => {
     setSelectedPhoneId(phoneId)
@@ -97,18 +158,18 @@ export function ChatInterface() {
       if (response.ok) {
         newMsg.status = "sent"
         newMsg.id = data.message_id || newMsg.id
-        updated.messages = updated.messages.map((m) => (m.id === newMsg.id ? newMsg : m))
+        updated.messages = updated.messages.map((m: any) => (m.id === newMsg.id ? newMsg : m))
         setConversations(new Map(conversations).set(selectedConversation, updated))
       } else {
         console.error("Send message error:", data.error)
         newMsg.status = "failed"
-        updated.messages = updated.messages.map((m) => (m.id === newMsg.id ? newMsg : m))
+        updated.messages = updated.messages.map((m: any) => (m.id === newMsg.id ? newMsg : m))
         setConversations(new Map(conversations).set(selectedConversation, updated))
       }
     } catch (error) {
       console.error("Failed to send message:", error)
       newMsg.status = "failed"
-      updated.messages = updated.messages.map((m) => (m.id === newMsg.id ? newMsg : m))
+      updated.messages = updated.messages.map((m: any) => (m.id === newMsg.id ? newMsg : m))
       setConversations(new Map(conversations).set(selectedConversation, updated))
     }
   }

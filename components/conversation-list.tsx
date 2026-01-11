@@ -84,10 +84,17 @@ export function ConversationList({
             >
               <div className="flex items-center gap-2 mb-1">
                 <MessageCircle className="h-4 w-4 text-green-600" />
-                <p className="font-medium text-foreground truncate">{conv.recipientPhone}</p>
+                <p className="font-medium text-foreground truncate">
+                  {conv.contactName || conv.recipientPhone}
+                </p>
               </div>
               {conv.messages.length > 0 && (
-                <p className="text-xs text-muted-foreground truncate">{conv.messages[conv.messages.length - 1].text}</p>
+                <>
+                  <p className="text-xs text-muted-foreground truncate">{conv.messages[conv.messages.length - 1].text}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(conv.messages[conv.messages.length - 1].timestamp * 1000).toLocaleString()}
+                  </p>
+                </>
               )}
             </button>
           ))
