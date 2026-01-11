@@ -60,30 +60,33 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
             <p className="text-muted-foreground">No messages yet</p>
           </div>
         ) : (
-          conversation.messages.map((msg: any) => (
-            <div
-              key={msg.id}
-              className={cn("flex gap-3", msg.from === conversation.senderPhone ? "justify-end" : "justify-start")}
-            >
+          // Sort messages by timestamp before displaying
+          [...conversation.messages]
+            .sort((a: any, b: any) => a.timestamp - b.timestamp)
+            .map((msg: any) => (
               <div
-                className={cn(
-                  "max-w-xs px-4 py-2 rounded-lg",
-                  msg.from === conversation.senderPhone ? "bg-green-600 text-white" : "bg-muted text-foreground",
-                )}
+                key={msg.id}
+                className={cn("flex gap-3", msg.from === conversation.senderPhone ? "justify-end" : "justify-start")}
               >
-                <p className="text-sm">{msg.text}</p>
                 <div
                   className={cn(
-                    "flex items-center gap-1 mt-1 text-xs",
-                    msg.from === conversation.senderPhone ? "text-green-100" : "text-muted-foreground",
+                    "max-w-xs px-4 py-2 rounded-lg",
+                    msg.from === conversation.senderPhone ? "bg-green-600 text-white" : "bg-muted text-foreground",
                   )}
                 >
-                  <span>{formatToIST(msg.timestamp, 'short')}</span>
-                  {msg.from === conversation.senderPhone && getStatusIcon(msg.status)}
+                  <p className="text-sm">{msg.text}</p>
+                  <div
+                    className={cn(
+                      "flex items-center gap-1 mt-1 text-xs",
+                      msg.from === conversation.senderPhone ? "text-green-100" : "text-muted-foreground",
+                    )}
+                  >
+                    <span>{formatToIST(msg.timestamp, 'short')}</span>
+                    {msg.from === conversation.senderPhone && getStatusIcon(msg.status)}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))
         )}
         <div ref={messagesEndRef} />
       </div>

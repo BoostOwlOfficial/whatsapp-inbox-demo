@@ -137,7 +137,7 @@ export function ChatInterface() {
       from: conversation.senderPhone,
       to: conversation.recipientPhone,
       text: message,
-      timestamp: Date.now(),
+      timestamp: Math.floor(Date.now() / 1000), // Convert to seconds to match Supabase timestamps
       status: "sending",
       type: "text",
     }
