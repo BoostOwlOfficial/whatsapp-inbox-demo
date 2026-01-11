@@ -30,8 +30,9 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     const [error, setError] = useState<string | null>(null)
     const intervalRef = useRef<NodeJS.Timeout | null>(null)
     const isMountedRef = useRef(true)
+    const lastFetchTimestampRef = useRef<number>(0)
 
-    const fetchMessages = useCallback(async () => {
+    const fetchMessages = useCallback(async (isInitialFetch = false) => {
         if (!enabled) return
 
         try {
@@ -44,6 +45,11 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
             if (fromNumber) params.append("fromNumber", fromNumber)
             if (toNumber) params.append("toNumber", toNumber)
 
+            // Only fetch messages newer than last fetch (incremental polling)
+            if (!isInitialFetch && lastFetchTimestampRef.current > 0) {
+                params.append("since", lastFetchTimestampRef.current.toString())
+            }
+
             const response = await fetch(`/api/messages?${params.toString()}`)
 
             if (!response.ok) {
@@ -51,9 +57,27 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
             }
 
             const data = await response.json()
+            const newMessages = data.messages || []
 
-            if (isMountedRef.current) {
-                setMessages(data.messages || [])
+            if (isMountedRef.current && newMessages.length > 0) {
+                if (isInitialFetch) {
+                    // Initial fetch: replace all messages
+                    setMessages(newMessages)
+                } else {
+                    // Incremental fetch: merge new messages
+                    setMessages((prevMessages) => {
+                        const messageMap = new Map(prevMessages.map(m => [m.id, m]))
+                        newMessages.forEach((msg: WhatsAppMessage) => {
+                            messageMap.set(msg.id, msg)
+                        })
+                        // Sort by timestamp
+                        return Array.from(messageMap.values()).sort((a, b) => a.timestamp - b.timestamp)
+                    })
+                }
+
+                // Update last fetch timestamp to the latest message timestamp
+                const latestTimestamp = Math.max(...newMessages.map((m: WhatsAppMessage) => m.timestamp))
+                lastFetchTimestampRef.current = latestTimestamp
             }
         } catch (err) {
             if (isMountedRef.current) {
@@ -70,9 +94,9 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
     // Initial fetch
     useEffect(() => {
         if (enabled) {
-            fetchMessages()
+            fetchMessages(true) // Initial fetch gets all messages
         }
-    }, [fetchMessages, enabled])
+    }, [enabled, phoneNumberId, fromNumber, toNumber])
 
     // Set up polling
     useEffect(() => {
@@ -87,7 +111,7 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
 
         // Set up new polling interval
         intervalRef.current = setInterval(() => {
-            fetchMessages()
+            fetchMessages(false) // Incremental fetch gets only new messages
         }, pollingInterval)
 
         // Cleanup on unmount or when dependencies change
@@ -113,6 +137,6 @@ export function useMessages(options: UseMessagesOptions = {}): UseMessagesReturn
         messages,
         loading,
         error,
-        refetch: fetchMessages,
+        refetch: () => fetchMessages(true),
     }
 }

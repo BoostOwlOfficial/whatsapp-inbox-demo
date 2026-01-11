@@ -72,6 +72,11 @@ export function ChatInterface() {
           createdAt: new Date(msg.created_at || Date.now()).toISOString(),
           contactName: msg.contact_name,
         }
+      } else {
+        // Update contact name if available (in case it changed)
+        if (msg.contact_name && msg.contact_name !== conv.contactName) {
+          conv.contactName = msg.contact_name
+        }
       }
 
       // Check if message already exists (deduplicate by ID)
@@ -88,9 +93,10 @@ export function ChatInterface() {
           type: msg.message_type,
         }
         conv.messages.push(localMsg)
-        // Sort messages by timestamp
-        conv.messages.sort((a: any, b: any) => a.timestamp - b.timestamp)
       }
+
+      // Always sort messages by timestamp to ensure correct order
+      conv.messages.sort((a: any, b: any) => a.timestamp - b.timestamp)
 
       updatedConversations.set(convId, conv)
     })
