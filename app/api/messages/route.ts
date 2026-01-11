@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
         const phoneNumberId = searchParams.get("phoneNumberId")
         const fromNumber = searchParams.get("fromNumber")
         const toNumber = searchParams.get("toNumber")
+        const since = searchParams.get("since") // Timestamp for incremental polling
         const limit = parseInt(searchParams.get("limit") || "100")
         const offset = parseInt(searchParams.get("offset") || "0")
 
@@ -26,6 +27,11 @@ export async function GET(request: NextRequest) {
         // Apply filters
         if (phoneNumberId) {
             query = query.eq("phone_number_id", phoneNumberId)
+        }
+
+        // Filter by timestamp (for incremental polling)
+        if (since) {
+            query = query.gt("timestamp", parseInt(since))
         }
 
         // Filter by conversation (bidirectional)
