@@ -156,16 +156,21 @@ export function ChatInterface() {
           apiVersion,
           recipientPhone: conversation.recipientPhone,
           message,
+          senderPhone: conversation.senderPhone, // Pass sender phone for Supabase
         }),
       })
 
       const data = await response.json()
 
       if (response.ok) {
+        // Update message status to sent
         newMsg.status = "sent"
         newMsg.id = data.message_id || newMsg.id
         updated.messages = updated.messages.map((m: any) => (m.id === newMsg.id ? newMsg : m))
         setConversations(new Map(conversations).set(selectedConversation, updated))
+
+        // Message will be fetched from Supabase on next poll
+        console.log("Message sent and saved to Supabase:", data.message_id)
       } else {
         console.error("Send message error:", data.error)
         newMsg.status = "failed"
