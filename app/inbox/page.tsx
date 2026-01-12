@@ -50,6 +50,18 @@ export default function InboxPage() {
         }
     }, [phoneNumberId])
 
+    // Update selected conversation when conversations change (for real-time updates)
+    useEffect(() => {
+        if (selectedConversation && conversations.length > 0) {
+            // Find the updated version of the selected conversation
+            const updated = conversations.find(c => c.id === selectedConversation.id)
+            if (updated) {
+                console.log("🔄 Updating selected conversation with new messages")
+                setSelectedConversation(updated)
+            }
+        }
+    }, [conversations]) // Only depend on conversations, not selectedConversation to avoid loop
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!messageInput.trim() || !selectedConversation || !accessToken || !phoneNumberId) return
@@ -59,9 +71,10 @@ export default function InboxPage() {
         setSending(true)
 
         try {
-            // Create optimistic message
-            const optimisticMessage = {
+            // Create optimistic message with all required fields
+            const optimisticMessage: any = {
                 id: `temp-${Date.now()}`,
+                phone_number_id: phoneNumberId,
                 from_number: myPhoneNumber,
                 to_number: selectedConversation.recipientPhone,
                 message_text: messageText,
@@ -69,6 +82,7 @@ export default function InboxPage() {
                 timestamp: Math.floor(Date.now() / 1000),
                 status: "sent",
                 contact_name: selectedConversation.contactName,
+                metadata: null,
             }
 
             // Add to UI immediately
@@ -87,7 +101,6 @@ export default function InboxPage() {
             if (!result.success) {
                 console.error("Failed to send message:", result.error)
                 alert("Failed to send message: " + result.error)
-                // Optionally: remove optimistic message or mark as failed
             }
             // The polling will eventually sync the real message from server
         } catch (error) {

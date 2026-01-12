@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
 import { fetchMessages, pollNewMessages, groupMessagesByConversation, extractContacts, Conversation, Contact } from "./whatsapp-api"
 import { WhatsAppMessage } from "./supabase"
 import { useSettings } from "./settings-context"
@@ -35,6 +35,13 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [initialized, setInitialized] = useState(false)
+
+    // Use ref to avoid polling restart on every message change
+    const messagesRef = useRef<WhatsAppMessage[]>([])
+
+    useEffect(() => {
+        messagesRef.current = messages
+    }, [messages])
 
     // Function to fetch and group messages
     const fetchAndGroupMessages = useCallback(async (phoneId: string) => {
@@ -75,7 +82,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         }
     }, [phoneNumberId, initialized, fetchAndGroupMessages])
 
-    // Polling for new messages
+    // Polling for new messages - FIXED: removed messages from dependencies
     useEffect(() => {
         if (!phoneNumberId || !initialized) {
             console.log("Polling disabled - phoneNumberId:", phoneNumberId, "initialized:", initialized)
@@ -85,25 +92,35 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         console.log("Starting polling for phoneNumberId:", phoneNumberId)
         const pollingInterval = setInterval(async () => {
             try {
-                const lastTimestamp = messages[messages.length - 1]?.timestamp || 0
-                console.log("Polling for new messages since:", lastTimestamp)
+                const currentMessages = messagesRef.current
+                const lastTimestamp = currentMessages[currentMessages.length - 1]?.timestamp || 0
+                console.log("📡 Polling: lastTimestamp =", lastTimestamp, "total messages =", currentMessages.length)
                 const newMessages = await pollNewMessages(phoneNumberId, lastTimestamp)
 
                 if (newMessages.length > 0) {
-                    console.log("Found new messages:", newMessages.length)
+                    console.log("✅ Found", newMessages.length, "new messages:", newMessages.map(m => ({
+                        id: m.id.substring(0, 20),
+                        timestamp: m.timestamp,
+                        text: m.message_text?.substring(0, 30)
+                    })))
+
                     // Append new messages
-                    const updatedMessages = [...messages, ...newMessages]
+                    const updatedMessages = [...currentMessages, ...newMessages]
+                    console.log("📝 Updating state with", updatedMessages.length, "total messages")
                     setMessages(updatedMessages)
 
                     // Re-group conversations and contacts
                     const grouped = groupMessagesByConversation(updatedMessages, phoneNumberId)
+                    console.log("📊 Grouped into", grouped.length, "conversations")
                     setConversations(grouped)
 
                     const extractedContacts = extractContacts(updatedMessages, phoneNumberId)
                     setContacts(extractedContacts)
+                } else {
+                    console.log("⏭️ No new messages")
                 }
             } catch (err) {
-                console.error("Polling error:", err)
+                console.error("❌ Polling error:", err)
             }
         }, 5000) // Poll every 5 seconds
 
@@ -111,7 +128,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
             console.log("Stopping polling")
             clearInterval(pollingInterval)
         }
-    }, [phoneNumberId, messages, initialized])
+    }, [phoneNumberId, initialized]) // REMOVED messages from dependencies
 
     // Manual refetch function
     const refetch = useCallback(async () => {
