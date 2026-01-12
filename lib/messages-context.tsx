@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
 import { fetchMessages, pollNewMessages, groupMessagesByConversation, extractContacts, Conversation, Contact } from "./whatsapp-api"
 import { WhatsAppMessage } from "./supabase"
+import { useSettings } from "./settings-context"
 
 export interface Message {
     id: string
@@ -27,81 +28,78 @@ interface MessagesContextType {
 const MessagesContext = createContext<MessagesContextType | undefined>(undefined)
 
 export function MessagesProvider({ children }: { children: ReactNode }) {
+    const { phoneNumberId } = useSettings()
     const [messages, setMessages] = useState<WhatsAppMessage[]>([])
     const [conversations, setConversations] = useState<Conversation[]>([])
     const [contacts, setContacts] = useState<Contact[]>([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [initialized, setInitialized] = useState(false)
-    const [phoneNumberId, setPhoneNumberId] = useState<string>("")
-    const [myPhoneNumber, setMyPhoneNumber] = useState<string>("")
 
     // Function to fetch and group messages
-    const fetchAndGroupMessages = useCallback(async (phoneId?: string, myPhone?: string) => {
-        if (!phoneId || !myPhone) return
+    const fetchAndGroupMessages = useCallback(async (phoneId: string) => {
+        if (!phoneId) return
 
         try {
             setLoading(true)
             setError(null)
+            console.log("Fetching messages for phoneNumberId:", phoneId)
             const fetchedMessages = await fetchMessages(phoneId)
+            console.log("Fetched messages:", fetchedMessages.length)
             setMessages(fetchedMessages)
 
             // Group messages into conversations
-            const grouped = groupMessagesByConversation(fetchedMessages, myPhone)
+            const grouped = groupMessagesByConversation(fetchedMessages, phoneId)
+            console.log("Grouped conversations:", grouped.length)
             setConversations(grouped)
 
             // Extract contacts
-            const extractedContacts = extractContacts(fetchedMessages, myPhone)
+            const extractedContacts = extractContacts(fetchedMessages, phoneId)
+            console.log("Extracted contacts:", extractedContacts.length)
             setContacts(extractedContacts)
 
             setInitialized(true)
         } catch (err) {
+            console.error("Error fetching messages:", err)
             setError(err instanceof Error ? err.message : "Failed to fetch messages")
         } finally {
             setLoading(false)
         }
     }, [])
 
-    // Initialize with settings from storage
+    // Initialize when phoneNumberId is available
     useEffect(() => {
-        if (typeof window !== "undefined") {
-            try {
-                const settings = localStorage.getItem("whatsapp_settings")
-                if (settings) {
-                    const parsed = JSON.parse(settings)
-                    if (parsed.phoneNumberId) {
-                        setPhoneNumberId(parsed.phoneNumberId)
-                        // You'll need to get myPhoneNumber from settings too
-                        // For now, using a placeholder - this should come from WhatsApp API or settings
-                        setMyPhoneNumber(parsed.businessPhoneNumber || "")
-                        fetchAndGroupMessages(parsed.phoneNumberId, parsed.businessPhoneNumber || "")
-                    }
-                }
-            } catch (err) {
-                console.error("Error loading settings:", err)
-            }
+        if (phoneNumberId && !initialized) {
+            console.log("Initializing MessagesContext with phoneNumberId:", phoneNumberId)
+            fetchAndGroupMessages(phoneNumberId)
         }
-    }, [fetchAndGroupMessages])
+    }, [phoneNumberId, initialized, fetchAndGroupMessages])
 
     // Polling for new messages
     useEffect(() => {
-        if (!phoneNumberId || !myPhoneNumber || !initialized) return
+        if (!phoneNumberId || !initialized) {
+            console.log("Polling disabled - phoneNumberId:", phoneNumberId, "initialized:", initialized)
+            return
+        }
 
+        console.log("Starting polling for phoneNumberId:", phoneNumberId)
         const pollingInterval = setInterval(async () => {
             try {
                 const lastTimestamp = messages[messages.length - 1]?.timestamp || 0
+                console.log("Polling for new messages since:", lastTimestamp)
                 const newMessages = await pollNewMessages(phoneNumberId, lastTimestamp)
 
                 if (newMessages.length > 0) {
+                    console.log("Found new messages:", newMessages.length)
                     // Append new messages
                     const updatedMessages = [...messages, ...newMessages]
                     setMessages(updatedMessages)
 
                     // Re-group conversations and contacts
-                    const grouped = groupMessagesByConversation(updatedMessages, myPhoneNumber)
+                    const grouped = groupMessagesByConversation(updatedMessages, phoneNumberId)
                     setConversations(grouped)
 
-                    const extractedContacts = extractContacts(updatedMessages, myPhoneNumber)
+                    const extractedContacts = extractContacts(updatedMessages, phoneNumberId)
                     setContacts(extractedContacts)
                 }
             } catch (err) {
@@ -109,13 +107,18 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
             }
         }, 5000) // Poll every 5 seconds
 
-        return () => clearInterval(pollingInterval)
-    }, [phoneNumberId, myPhoneNumber, messages, initialized])
+        return () => {
+            console.log("Stopping polling")
+            clearInterval(pollingInterval)
+        }
+    }, [phoneNumberId, messages, initialized])
 
     // Manual refetch function
     const refetch = useCallback(async () => {
-        await fetchAndGroupMessages(phoneNumberId, myPhoneNumber)
-    }, [fetchAndGroupMessages, phoneNumberId, myPhoneNumber])
+        if (phoneNumberId) {
+            await fetchAndGroupMessages(phoneNumberId)
+        }
+    }, [fetchAndGroupMessages, phoneNumberId])
 
     // Add optimistic message for instant UI update
     const addOptimisticMessage = useCallback((message: WhatsAppMessage) => {
@@ -124,13 +127,15 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         setMessages(updatedMessages)
 
         // Re-group conversations with the new message
-        const grouped = groupMessagesByConversation(updatedMessages, myPhoneNumber)
-        setConversations(grouped)
+        if (phoneNumberId) {
+            const grouped = groupMessagesByConversation(updatedMessages, phoneNumberId)
+            setConversations(grouped)
 
-        // Re-extract contacts
-        const extractedContacts = extractContacts(updatedMessages, myPhoneNumber)
-        setContacts(extractedContacts)
-    }, [messages, myPhoneNumber])
+            // Re-extract contacts
+            const extractedContacts = extractContacts(updatedMessages, phoneNumberId)
+            setContacts(extractedContacts)
+        }
+    }, [messages, phoneNumberId])
 
     return (
         <MessagesContext.Provider
