@@ -21,6 +21,7 @@ interface MessagesContextType {
     error: string | null
     refetch: () => Promise<void>
     initialized: boolean
+    addOptimisticMessage: (message: WhatsAppMessage) => void
 }
 
 const MessagesContext = createContext<MessagesContextType | undefined>(undefined)
@@ -116,6 +117,21 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         await fetchAndGroupMessages(phoneNumberId, myPhoneNumber)
     }, [fetchAndGroupMessages, phoneNumberId, myPhoneNumber])
 
+    // Add optimistic message for instant UI update
+    const addOptimisticMessage = useCallback((message: WhatsAppMessage) => {
+        // Add message to state immediately
+        const updatedMessages = [...messages, message]
+        setMessages(updatedMessages)
+
+        // Re-group conversations with the new message
+        const grouped = groupMessagesByConversation(updatedMessages, myPhoneNumber)
+        setConversations(grouped)
+
+        // Re-extract contacts
+        const extractedContacts = extractContacts(updatedMessages, myPhoneNumber)
+        setContacts(extractedContacts)
+    }, [messages, myPhoneNumber])
+
     return (
         <MessagesContext.Provider
             value={{
@@ -126,6 +142,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
                 error,
                 refetch,
                 initialized,
+                addOptimisticMessage,
             }}
         >
             {children}

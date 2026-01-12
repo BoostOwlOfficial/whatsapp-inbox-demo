@@ -34,7 +34,7 @@ export default function InboxPage() {
     const [myPhoneNumber, setMyPhoneNumber] = useState("")
 
     // Use global messages context instead of hook
-    const { conversations, loading, error, refetch } = useMessagesContext()
+    const { conversations, loading, error, refetch, addOptimisticMessage } = useMessagesContext()
 
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
     const [messageInput, setMessageInput] = useState("")
@@ -54,25 +54,42 @@ export default function InboxPage() {
         e.preventDefault()
         if (!messageInput.trim() || !selectedConversation || !accessToken || !phoneNumberId) return
 
+        const messageText = messageInput.trim()
+        setMessageInput("") // Clear input immediately
         setSending(true)
+
         try {
+            // Create optimistic message
+            const optimisticMessage = {
+                id: `temp-${Date.now()}`,
+                from_number: myPhoneNumber,
+                to_number: selectedConversation.recipientPhone,
+                message_text: messageText,
+                message_type: "text",
+                timestamp: Math.floor(Date.now() / 1000),
+                status: "sent",
+                contact_name: selectedConversation.contactName,
+            }
+
+            // Add to UI immediately
+            addOptimisticMessage(optimisticMessage)
+
+            // Send message in background
             const result = await sendMessage({
                 accessToken,
                 phoneNumberId,
                 recipientPhone: selectedConversation.recipientPhone,
-                message: messageInput,
+                message: messageText,
                 apiVersion: apiVersion || "v21.0",
                 senderPhone: myPhoneNumber,
             })
 
-            if (result.success) {
-                setMessageInput("")
-                // Refetch messages to show the sent message
-                await refetch()
-            } else {
+            if (!result.success) {
                 console.error("Failed to send message:", result.error)
                 alert("Failed to send message: " + result.error)
+                // Optionally: remove optimistic message or mark as failed
             }
+            // The polling will eventually sync the real message from server
         } catch (error) {
             console.error("Error sending message:", error)
             alert("Error sending message")
