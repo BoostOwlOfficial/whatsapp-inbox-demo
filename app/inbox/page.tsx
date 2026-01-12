@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { ProtectedRoute } from "@/components/protected-route"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -34,12 +34,15 @@ export default function InboxPage() {
     const [myPhoneNumber, setMyPhoneNumber] = useState("")
 
     // Use global messages context instead of hook
-    const { conversations, loading, error, refetch, addOptimisticMessage } = useMessagesContext()
+    const { conversations, loading, error, refetch, addOptimisticMessage, updateMessageId } = useMessagesContext()
 
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
     const [messageInput, setMessageInput] = useState("")
     const [activeTab, setActiveTab] = useState<"open" | "unread" | "my_chats">("open")
     const [sending, setSending] = useState(false)
+
+    // Ref for auto-scroll to latest message
+    const messagesEndRef = useRef<HTMLDivElement>(null)
 
     // Get my phone number from settings on mount
     useEffect(() => {
@@ -62,6 +65,13 @@ export default function InboxPage() {
         }
     }, [conversations]) // Only depend on conversations, not selectedConversation to avoid loop
 
+    // Auto-scroll to bottom when messages change
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+        }
+    }, [selectedConversation?.messages])
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!messageInput.trim() || !selectedConversation || !accessToken || !phoneNumberId) return
@@ -70,10 +80,13 @@ export default function InboxPage() {
         setMessageInput("") // Clear input immediately
         setSending(true)
 
+        // Generate temporary ID
+        const tempId = `temp-${Date.now()}`
+
         try {
             // Create optimistic message with all required fields
             const optimisticMessage: any = {
-                id: `temp-${Date.now()}`,
+                id: tempId,
                 phone_number_id: phoneNumberId,
                 from_number: myPhoneNumber,
                 to_number: selectedConversation.recipientPhone,
@@ -98,7 +111,11 @@ export default function InboxPage() {
                 senderPhone: myPhoneNumber,
             })
 
-            if (!result.success) {
+            if (result.success && result.message_id) {
+                // Update the temporary ID with the real WhatsApp message ID
+                console.log(`✅ Message sent successfully. Updating ID: ${tempId} → ${result.message_id}`)
+                updateMessageId(tempId, result.message_id)
+            } else {
                 console.error("Failed to send message:", result.error)
                 alert("Failed to send message: " + result.error)
             }
@@ -336,6 +353,8 @@ export default function InboxPage() {
                                         </div>
                                     )
                                 })}
+                                {/* Invisible anchor for auto-scroll */}
+                                <div ref={messagesEndRef} />
                             </div>
                         </div>
 

@@ -84,9 +84,10 @@ export async function POST(request: NextRequest) {
                 timestamp: message.timestamp,
               })
 
-              // Save to Supabase
+              // Save to Supabase with retry logic
               try {
                 const { supabase, isSupabaseConfigured } = await import("@/lib/supabase")
+                const { retrySupabaseOperation } = await import("@/lib/retry-utils")
 
                 // Only save if Supabase is configured
                 if (!isSupabaseConfigured()) {
@@ -110,17 +111,27 @@ export async function POST(request: NextRequest) {
                   },
                 }
 
-                const { error } = await supabase
-                  .from("whatsapp_messages")
-                  .insert(messageData)
+                // Retry the insert operation
+                await retrySupabaseOperation(
+                  async () => {
+                    const { error } = await supabase
+                      .from("whatsapp_messages")
+                      .insert(messageData)
 
-                if (error) {
-                  console.error("Error saving message to Supabase:", error)
-                } else {
-                  console.log("Message saved to Supabase:", message.id)
-                }
-              } catch (error) {
-                console.error("Failed to save message to Supabase:", error)
+                    if (error) throw error
+                  },
+                  `Save message ${message.id.substring(0, 20)}`
+                )
+
+                console.log("✅ Message saved to Supabase:", message.id)
+              } catch (error: any) {
+                // Log detailed error for debugging
+                console.error("Error saving message to Supabase:", {
+                  message: error.message,
+                  details: error.stack || error.toString(),
+                  hint: error.hint || "",
+                  code: error.code || "",
+                })
               }
             }
           }
@@ -138,6 +149,7 @@ export async function POST(request: NextRequest) {
 
               try {
                 const { supabase, isSupabaseConfigured } = await import("@/lib/supabase")
+                const { retrySupabaseOperation } = await import("@/lib/retry-utils")
 
                 // Only update if Supabase is configured
                 if (!isSupabaseConfigured()) {
@@ -145,18 +157,26 @@ export async function POST(request: NextRequest) {
                   continue
                 }
 
-                const { error } = await supabase
-                  .from("whatsapp_messages")
-                  .update({ status: status.status })
-                  .eq("id", status.id)
+                // Retry the update operation
+                await retrySupabaseOperation(
+                  async () => {
+                    const { error } = await supabase
+                      .from("whatsapp_messages")
+                      .update({ status: status.status })
+                      .eq("id", status.id)
 
-                if (error) {
-                  console.error("Error updating message status:", error)
-                } else {
-                  console.log("Message status updated:", status.id)
-                }
-              } catch (error) {
-                console.error("Failed to update message status:", error)
+                    if (error) throw error
+                  },
+                  `Update status for ${status.id.substring(0, 20)}`
+                )
+
+                console.log("✅ Message status updated:", status.id)
+              } catch (error: any) {
+                console.error("Error updating message status:", {
+                  message: error.message,
+                  details: error.stack || error.toString(),
+                  code: error.code || "",
+                })
               }
             }
           }

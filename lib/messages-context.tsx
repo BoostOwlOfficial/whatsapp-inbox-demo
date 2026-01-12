@@ -23,6 +23,7 @@ interface MessagesContextType {
     refetch: () => Promise<void>
     initialized: boolean
     addOptimisticMessage: (message: WhatsAppMessage) => void
+    updateMessageId: (tempId: string, realId: string) => void
 }
 
 const MessagesContext = createContext<MessagesContextType | undefined>(undefined)
@@ -38,6 +39,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
 
     // Use ref to avoid polling restart on every message change
     const messagesRef = useRef<WhatsAppMessage[]>([])
+    const lastPolledTimestamp = useRef<number>(0)
 
     useEffect(() => {
         messagesRef.current = messages
@@ -54,6 +56,13 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
             const fetchedMessages = await fetchMessages(phoneId)
             console.log("Fetched messages:", fetchedMessages.length)
             setMessages(fetchedMessages)
+
+            // Update last polled timestamp
+            if (fetchedMessages.length > 0) {
+                const maxTimestamp = Math.max(...fetchedMessages.map(m => m.timestamp))
+                lastPolledTimestamp.current = maxTimestamp
+                console.log("📅 Initial lastPolledTimestamp set to:", maxTimestamp)
+            }
 
             // Group messages into conversations
             const grouped = groupMessagesByConversation(fetchedMessages, phoneId)
@@ -93,9 +102,10 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         const pollingInterval = setInterval(async () => {
             try {
                 const currentMessages = messagesRef.current
-                const lastTimestamp = currentMessages[currentMessages.length - 1]?.timestamp || 0
-                console.log("📡 Polling: lastTimestamp =", lastTimestamp, "total messages =", currentMessages.length)
-                const newMessages = await pollNewMessages(phoneNumberId, lastTimestamp)
+                // Use the tracked timestamp instead of last message timestamp
+                const timestampToUse = lastPolledTimestamp.current || (currentMessages[currentMessages.length - 1]?.timestamp || 0)
+                console.log("📡 Polling: lastPolledTimestamp =", timestampToUse, "total messages =", currentMessages.length)
+                const newMessages = await pollNewMessages(phoneNumberId, timestampToUse)
 
                 if (newMessages.length > 0) {
                     console.log("✅ Found", newMessages.length, "new messages:", newMessages.map(m => ({
@@ -104,18 +114,33 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
                         text: m.message_text?.substring(0, 30)
                     })))
 
-                    // Append new messages
-                    const updatedMessages = [...currentMessages, ...newMessages]
-                    console.log("📝 Updating state with", updatedMessages.length, "total messages")
-                    setMessages(updatedMessages)
+                    // Update last polled timestamp to the latest from this batch
+                    const maxTimestamp = Math.max(...newMessages.map(m => m.timestamp))
+                    lastPolledTimestamp.current = maxTimestamp
+                    console.log("📅 Updated lastPolledTimestamp to:", maxTimestamp)
 
-                    // Re-group conversations and contacts
-                    const grouped = groupMessagesByConversation(updatedMessages, phoneNumberId)
-                    console.log("📊 Grouped into", grouped.length, "conversations")
-                    setConversations(grouped)
+                    // Deduplicate messages by ID to prevent duplicates
+                    const existingIds = new Set(currentMessages.map(m => m.id))
+                    const uniqueNewMessages = newMessages.filter(m => !existingIds.has(m.id))
 
-                    const extractedContacts = extractContacts(updatedMessages, phoneNumberId)
-                    setContacts(extractedContacts)
+                    if (uniqueNewMessages.length > 0) {
+                        console.log(`📝 Adding ${uniqueNewMessages.length} unique messages (filtered ${newMessages.length - uniqueNewMessages.length} duplicates)`)
+
+                        // Append only unique new messages
+                        const updatedMessages = [...currentMessages, ...uniqueNewMessages]
+                        console.log("📝 Updating state with", updatedMessages.length, "total messages")
+                        setMessages(updatedMessages)
+
+                        // Re-group conversations and contacts
+                        const grouped = groupMessagesByConversation(updatedMessages, phoneNumberId)
+                        console.log("📊 Grouped into", grouped.length, "conversations")
+                        setConversations(grouped)
+
+                        const extractedContacts = extractContacts(updatedMessages, phoneNumberId)
+                        setContacts(extractedContacts)
+                    } else {
+                        console.log("⏭️ All new messages were duplicates, but timestamp updated to prevent re-polling")
+                    }
                 } else {
                     console.log("⏭️ No new messages")
                 }
@@ -139,7 +164,15 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
 
     // Add optimistic message for instant UI update
     const addOptimisticMessage = useCallback((message: WhatsAppMessage) => {
+        // Check if message already exists to prevent duplicates
+        const messageExists = messages.some(m => m.id === message.id)
+        if (messageExists) {
+            console.log("⏭️ Message already exists, skipping optimistic add:", message.id.substring(0, 20))
+            return
+        }
+
         // Add message to state immediately
+        console.log("➕ Adding optimistic message:", message.id.substring(0, 20))
         const updatedMessages = [...messages, message]
         setMessages(updatedMessages)
 
@@ -154,6 +187,41 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         }
     }, [messages, phoneNumberId])
 
+    // Update temporary message ID with real WhatsApp message ID
+    const updateMessageId = useCallback((tempId: string, realId: string) => {
+        console.log(`🔄 Updating message ID: ${tempId.substring(0, 20)} → ${realId.substring(0, 20)}`)
+
+        setMessages(currentMessages => {
+            // Find the message with temp ID
+            const messageIndex = currentMessages.findIndex(m => m.id === tempId)
+
+            if (messageIndex === -1) {
+                console.log("⚠️ Temp message not found, skipping ID update")
+                return currentMessages
+            }
+
+            // Update the ID
+            const updatedMessages = [...currentMessages]
+            updatedMessages[messageIndex] = {
+                ...updatedMessages[messageIndex],
+                id: realId
+            }
+
+            console.log("✅ Message ID updated successfully")
+
+            // Re-group conversations with updated message
+            if (phoneNumberId) {
+                const grouped = groupMessagesByConversation(updatedMessages, phoneNumberId)
+                setConversations(grouped)
+
+                const extractedContacts = extractContacts(updatedMessages, phoneNumberId)
+                setContacts(extractedContacts)
+            }
+
+            return updatedMessages
+        })
+    }, [phoneNumberId])
+
     return (
         <MessagesContext.Provider
             value={{
@@ -165,6 +233,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
                 refetch,
                 initialized,
                 addOptimisticMessage,
+                updateMessageId,
             }}
         >
             {children}
