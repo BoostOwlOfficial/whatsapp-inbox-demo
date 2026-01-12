@@ -398,6 +398,18 @@ export interface Template {
     content: string
     variables: string[]
     createdAt: string
+    // WhatsApp API specific fields
+    components?: Array<{
+        type: "HEADER" | "BODY" | "FOOTER" | "BUTTONS"
+        format?: "TEXT" | "IMAGE" | "VIDEO" | "DOCUMENT"
+        text?: string
+        buttons?: Array<{
+            type: "QUICK_REPLY" | "URL" | "PHONE_NUMBER"
+            text: string
+        }>
+    }>
+    headerText?: string
+    footerText?: string
 }
 
 export const sampleTemplates: Template[] = [
