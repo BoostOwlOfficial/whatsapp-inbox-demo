@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useSettings } from "@/lib/settings-context"
-import { useMessages } from "@/hooks/use-messages"
+import { useMessagesContext } from "@/lib/messages-context"
 import { sendMessage } from "@/lib/whatsapp-api"
 import type { Conversation } from "@/lib/whatsapp-api"
 import {
@@ -33,12 +33,8 @@ export default function InboxPage() {
     const { phoneNumberId, accessToken, apiVersion } = useSettings()
     const [myPhoneNumber, setMyPhoneNumber] = useState("")
 
-    // Fetch messages using the hook
-    const { conversations, loading, error, refetch } = useMessages({
-        phoneNumberId,
-        myPhoneNumber,
-        enabled: !!phoneNumberId && !!myPhoneNumber,
-    })
+    // Use global messages context instead of hook
+    const { conversations, loading, error, refetch } = useMessagesContext()
 
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
     const [messageInput, setMessageInput] = useState("")

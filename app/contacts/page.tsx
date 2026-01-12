@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useSettings } from "@/lib/settings-context"
-import { fetchMessages, extractContacts } from "@/lib/whatsapp-api"
+import { useMessagesContext } from "@/lib/messages-context"
 import type { Contact } from "@/lib/whatsapp-api"
 import {
     Search,
@@ -25,40 +25,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function ContactsPage() {
     const { phoneNumberId } = useSettings()
-    const [contacts, setContacts] = useState<Contact[]>([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
-    const [myPhoneNumber, setMyPhoneNumber] = useState("")
 
-    useEffect(() => {
-        if (phoneNumberId) {
-            setMyPhoneNumber(phoneNumberId)
-        }
-    }, [phoneNumberId])
-
-    useEffect(() => {
-        const loadContacts = async () => {
-            if (!phoneNumberId || !myPhoneNumber) {
-                setLoading(false)
-                return
-            }
-
-            try {
-                setError(null)
-                const messages = await fetchMessages(phoneNumberId)
-                const extractedContacts = extractContacts(messages, myPhoneNumber)
-                setContacts(extractedContacts)
-            } catch (err) {
-                console.error("Error loading contacts:", err)
-                setError(err instanceof Error ? err.message : "Failed to load contacts")
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        loadContacts()
-    }, [phoneNumberId, myPhoneNumber])
+    // Use global messages context
+    const { contacts, loading, error } = useMessagesContext()
 
     const filteredContacts = contacts.filter(contact => {
         const query = searchQuery.toLowerCase()

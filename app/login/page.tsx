@@ -49,7 +49,7 @@ export default function LoginPage() {
                     <div className="flex justify-center mb-6">
                         <div className="relative w-72 h-24">
                             <Image
-                                src="/boostowl-logo-primary (1).svg"
+                                src="/logo_boostowl.png"
                                 alt="BoostOwl"
                                 fill
                                 className="object-contain"
