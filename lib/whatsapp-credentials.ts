@@ -1,0 +1,115 @@
+import { supabase } from './supabase'
+import { decryptToken } from './crypto-utils'
+import type { WhatsAppAccount, WhatsAppCredential } from './supabase'
+
+interface WhatsAppAccountWithCredentials extends WhatsAppAccount {
+    whatsapp_credentials: WhatsAppCredential[]
+}
+
+interface DecryptedCredentials {
+    accessToken: string
+    phoneNumberId: string
+    wabaId: string
+    businessAccountId: string
+    displayName: string | null
+    phoneNumber: string | null
+    expiresAt: string | null
+}
+
+/**
+ * Fetches the active WhatsApp account with decrypted credentials
+ * @param userId - Optional user ID to filter accounts (if using multi-user)
+ * @returns Decrypted credentials or null if no active account
+ */
+export async function getWhatsAppCredentials(userId?: string | null): Promise<DecryptedCredentials | null> {
+    try {
+        // Build query
+        let query = supabase
+            .from('whatsapp_accounts')
+            .select(`
+                *,
+                whatsapp_credentials (*)
+            `)
+            .eq('is_active', true)
+            .order('connected_at', { ascending: false })
+            .limit(1)
+
+        // Add user filter if provided
+        if (userId) {
+            query = query.eq('user_id', userId)
+        }
+
+        const { data: accounts, error } = await query
+
+        if (error) {
+            console.error('Error fetching WhatsApp account:', error)
+            throw new Error('Failed to fetch WhatsApp account')
+        }
+
+        if (!accounts || accounts.length === 0) {
+            console.log('No active WhatsApp account found')
+            return null
+        }
+
+        const account = accounts[0] as unknown as WhatsAppAccountWithCredentials
+
+        if (!account.whatsapp_credentials || account.whatsapp_credentials.length === 0) {
+            console.error('No credentials found for account:', account.id)
+            throw new Error('No credentials found for WhatsApp account')
+        }
+
+        const credentials = account.whatsapp_credentials[0]
+
+        // Check if token is expired
+        if (credentials.token_expires_at) {
+            const expiresAt = new Date(credentials.token_expires_at)
+            if (expiresAt < new Date()) {
+                console.warn('WhatsApp access token has expired')
+                // TODO: Implement token refresh logic
+                throw new Error('WhatsApp access token has expired')
+            }
+        }
+
+        // Decrypt the access token
+        const accessToken = decryptToken(
+            credentials.encrypted_access_token,
+            credentials.encryption_iv,
+            credentials.encryption_auth_tag
+        )
+
+        return {
+            accessToken,
+            phoneNumberId: account.phone_number_id,
+            wabaId: account.waba_id,
+            businessAccountId: account.business_account_id,
+            displayName: account.display_name,
+            phoneNumber: account.phone_number,
+            expiresAt: credentials.token_expires_at,
+        }
+    } catch (error) {
+        console.error('Error getting WhatsApp credentials:', error)
+        throw error
+    }
+}
+
+/**
+ * Checks if a valid WhatsApp account is connected
+ * @param userId - Optional user ID to filter accounts
+ * @returns true if account exists and token is valid
+ */
+export async function hasValidWhatsAppAccount(userId?: string | null): Promise<boolean> {
+    try {
+        const credentials = await getWhatsAppCredentials(userId)
+        return credentials !== null
+    } catch {
+        return false
+    }
+}
+
+/**
+ * Gets the default API version to use
+ * Falls back to env var or v24.0
+ */
+export function getWhatsAppApiVersion(): string {
+    return process.env.WHATSAPP_GRAPH_API_VERSION || 'v24.0'
+}

@@ -41,6 +41,31 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased`}>
+        {/* Facebook SDK for WhatsApp Embedded Signup */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.fbAsyncInit = function() {
+                FB.init({
+                  appId: '2074250006740949',
+                  autoLogAppEvents: true,
+                  xfbml: true,
+                  version: 'v24.0'
+                });
+              };
+
+              // Load the JavaScript SDK asynchronously
+              (function(d, s, id) {
+                var js, fjs = d.getElementsByTagName(s)[0];
+                if (d.getElementById(id)) return;
+                js = d.createElement(s); js.id = id;
+                js.src = "https://connect.facebook.net/en_US/sdk.js";
+                fjs.parentNode.insertBefore(js, fjs);
+              }(document, 'script', 'facebook-jssdk'));
+            `,
+          }}
+        />
+
         <AuthProvider>
           <SettingsProvider>
             <MessagesProvider>

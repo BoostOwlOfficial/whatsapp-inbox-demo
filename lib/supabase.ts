@@ -46,3 +46,52 @@ export interface MessageInsert {
     status?: 'received' | 'sent' | 'delivered' | 'read' | 'failed'
     metadata?: Record<string, any> | null
 }
+
+// WhatsApp Account Types
+export interface WhatsAppAccount {
+    id: string
+    user_id: string | null
+    business_account_id: string
+    waba_id: string
+    phone_number_id: string
+    phone_number: string | null
+    display_name: string | null
+    quality_rating: string | null
+    is_active: boolean
+    connected_at: string
+    last_synced_at: string
+    created_at: string
+    updated_at: string
+}
+
+export interface WhatsAppAccountInsert {
+    user_id?: string | null
+    business_account_id: string
+    waba_id: string
+    phone_number_id: string
+    phone_number?: string | null
+    display_name?: string | null
+    quality_rating?: string | null
+    is_active?: boolean
+}
+
+export interface WhatsAppCredential {
+    id: string
+    account_id: string
+    encrypted_access_token: string
+    token_expires_at: string | null
+    encrypted_refresh_token: string | null
+    encryption_iv: string
+    encryption_auth_tag: string
+    created_at: string
+    updated_at: string
+}
+
+export interface WhatsAppCredentialInsert {
+    account_id: string
+    encrypted_access_token: string
+    token_expires_at?: string | null
+    encrypted_refresh_token?: string | null
+    encryption_iv: string
+    encryption_auth_tag: string
+}

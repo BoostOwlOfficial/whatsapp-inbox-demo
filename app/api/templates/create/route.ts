@@ -1,41 +1,41 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import type { TemplateCreationRequest, TemplateCreationResponse } from "@/lib/template-creation-helpers"
 import { validateTemplateCreation } from "@/lib/template-creation-helpers"
+import { getWhatsAppCredentials, getWhatsAppApiVersion } from "@/lib/whatsapp-credentials"
 
 /**
  * POST /api/templates/create
  * Create a new WhatsApp message template
- * Accepts template data in request body and settings in Authorization header + query params
+ * Uses encrypted credentials from database
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
     try {
-        // Get access token from Authorization header
-        const authHeader = request.headers.get("Authorization")
-        const accessToken = authHeader?.replace("Bearer ", "")
-
-        // Get settings from query parameters
+        // Get optional user ID from query
         const { searchParams } = new URL(request.url)
-        const apiVersion = searchParams.get("apiVersion") || "v21.0"
-        const wabaId = searchParams.get("wabaId")
+        const userId = searchParams.get("userId")
 
-        // Validate credentials
-        if (!accessToken) {
+        // Get WhatsApp credentials from database
+        let credentials
+        try {
+            credentials = await getWhatsAppCredentials(userId)
+        } catch (error) {
+            console.error("Error fetching credentials:", error)
             return NextResponse.json(
                 {
-                    error: "Missing access token",
-                    details: "Authorization header with Bearer token is required",
+                    error: "WhatsApp account not connected",
+                    details: "Please connect your WhatsApp Business account first",
                 },
                 { status: 401 }
             )
         }
 
-        if (!wabaId) {
+        if (!credentials) {
             return NextResponse.json(
                 {
-                    error: "Missing Business Account ID",
-                    details: "Please configure your WhatsApp Business Account ID in Settings",
+                    error: "No active WhatsApp account found",
+                    details: "Please connect your WhatsApp Business account in settings",
                 },
-                { status: 400 }
+                { status: 404 }
             )
         }
 
@@ -55,8 +55,10 @@ export async function POST(request: Request) {
             )
         }
 
+        const apiVersion = getWhatsAppApiVersion()
+
         // Build WhatsApp API URL
-        const url = `https://graph.facebook.com/${apiVersion}/${wabaId}/message_templates`
+        const url = `https://graph.facebook.com/${apiVersion}/${credentials.wabaId}/message_templates`
 
         console.log("Creating template:", templateData.name)
         console.log("POST to:", url)
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
         const response = await fetch(url, {
             method: "POST",
             headers: {
-                Authorization: `Bearer ${accessToken}`,
+                Authorization: `Bearer ${credentials.accessToken}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(templateData),
