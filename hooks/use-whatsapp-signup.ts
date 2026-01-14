@@ -189,13 +189,11 @@ export function useWhatsAppSignup() {
             );
 
             // Get user ID from config (set by backend via JWT)
-            const userId = signupConfig.userId;
-            console.log("[WhatsApp Signup] User ID:", userId);
+            console.log("[WhatsApp Signup] User will be identified from JWT token");
 
             const payload = {
               code: response.authResponse.code,
               state: signupConfig.state,
-              userId,
             };
 
             console.log(
@@ -203,13 +201,14 @@ export function useWhatsAppSignup() {
               payload
             );
 
-            // Send to our callback endpoint - backend will handle token exchange
+            // Send to our callback endpoint - backend will get userId from JWT
             const callbackResponse = await fetch(
               "/api/whatsapp/signup/callback",
               {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
+                  Authorization: `Bearer ${accessToken}`,
                 },
                 body: JSON.stringify(payload),
               }

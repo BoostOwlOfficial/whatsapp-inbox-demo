@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { encryptToken } from "@/lib/crypto-utils";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 import type {
   WhatsAppAccountInsert,
   WhatsAppCredentialInsert,
@@ -31,10 +32,34 @@ interface PhoneNumber {
 export async function POST(request: NextRequest) {
   try {
     console.log("[Callback] Processing WhatsApp signup callback...");
+
+    // CRITICAL: Get userId from JWT token, not from request body
+    const authHeader = request.headers.get("authorization");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("[Callback] Missing authorization header");
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.substring(7);
+    const decoded = verifyAccessToken(token);
+    if (!decoded) {
+      console.error("[Callback] Invalid JWT token");
+      return NextResponse.json(
+        { success: false, error: "Invalid token" },
+        { status: 401 }
+      );
+    }
+
+    const userId = decoded.userId;
+    console.log("[Callback] Authenticated user ID from JWT:", userId);
+
     const body = await request.json();
     console.log("[Callback] Request body:", JSON.stringify(body, null, 2));
 
-    const { code, state, userId } = body;
+    const { code, state } = body;
 
     // Validate required params
     if (!code) {
@@ -211,8 +236,7 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 60);
 
-    // User ID was sent in the request body from frontend
-    console.log("[Callback] Using user ID from body:", userId);
+    console.log("[Callback] Saving account for userId:", userId);
 
     // Insert WhatsApp account
     const accountData: WhatsAppAccountInsert = {
