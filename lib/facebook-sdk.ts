@@ -23,49 +23,64 @@ export const initFacebookSdk = (): Promise<void> => {
     try {
       console.log("[FB SDK] Initializing Facebook SDK...");
 
-      // If already initialized, resolve immediately
-      if (window.FB) {
-        console.log("[FB SDK] Already initialized");
-        resolve();
-        return;
-      }
+      // If SDK is already loaded AND initialized, resolve immediately
+      if (window.FB && typeof window.FB.init === "function") {
+        console.log("[FB SDK] SDK already loaded, checking if initialized...");
 
-      // Set up the async init function that FB SDK will call
-      window.fbAsyncInit = () => {
+        // Try to call init - if it throws, SDK wasn't initialized properly
         try {
-          console.log("[FB SDK] fbAsyncInit callback triggered");
-          window.FB!.init({
-            appId:
-              process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "2074250006740949",
+          window.FB.init({
+            appId: "2074250006740949",
             cookie: true,
             xfbml: true,
-            version: process.env.WHATSAPP_GRAPH_API_VERSION || "v24.0",
+            version: "v24.0",
           });
-
           console.log(
-            "[FB SDK] ✅ Successfully initialized with appId:",
-            process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "2074250006740949"
+            "[FB SDK] ✅ Successfully initialized (SDK was pre-loaded)"
           );
           resolve();
-        } catch (error) {
-          console.error("[FB SDK] ❌ Error in fbAsyncInit:", error);
-          reject(error);
+          return;
+        } catch (err) {
+          console.log(
+            "[FB SDK] SDK loaded but init failed, will retry via fbAsyncInit"
+          );
         }
-      };
+      }
 
-      // Add timeout in case SDK fails to load
+      // Set up timeout
       const timeout = setTimeout(() => {
         const error = new Error("Facebook SDK failed to load after 10 seconds");
         console.error("[FB SDK] ❌ Timeout:", error.message);
         reject(error);
       }, 10000);
 
-      // Clear timeout if SDK loads successfully
-      const originalFbAsyncInit = window.fbAsyncInit;
+      // Set up the async init function that FB SDK will call
       window.fbAsyncInit = () => {
-        clearTimeout(timeout);
-        originalFbAsyncInit?.();
+        try {
+          console.log("[FB SDK] fbAsyncInit callback triggered");
+          clearTimeout(timeout);
+
+          window.FB!.init({
+            appId: "2074250006740949",
+            cookie: true,
+            xfbml: true,
+            version: "v24.0",
+          });
+
+          console.log("[FB SDK] ✅ Successfully initialized via fbAsyncInit");
+          resolve();
+        } catch (error) {
+          console.error("[FB SDK] ❌ Error in fbAsyncInit:", error);
+          clearTimeout(timeout);
+          reject(error);
+        }
       };
+
+      // If SDK is already loaded (script tag executed before our code), call fbAsyncInit manually
+      if (window.FB) {
+        console.log("[FB SDK] SDK detected, calling fbAsyncInit manually");
+        window.fbAsyncInit();
+      }
     } catch (error) {
       console.error("[FB SDK] ❌ Unexpected error in initFacebookSdk:", error);
       reject(error);
