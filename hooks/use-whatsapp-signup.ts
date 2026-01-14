@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { initFacebookSdk, fbLogin } from "@/lib/facebook-sdk";
+import { useAuth } from "@/lib/auth-context";
 
 interface SignupConfig {
   appId: string;
@@ -30,6 +31,7 @@ interface SignupResponse {
 }
 
 export function useWhatsAppSignup() {
+  const { accessToken } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(
@@ -41,7 +43,19 @@ export function useWhatsAppSignup() {
   const checkStatus = useCallback(async () => {
     try {
       console.log("[WhatsApp Signup] Checking account status...");
-      const response = await fetch("/api/whatsapp/signup/status");
+
+      if (!accessToken) {
+        console.warn(
+          "[WhatsApp Signup] No access token, skipping status check"
+        );
+        return;
+      }
+
+      const response = await fetch("/api/whatsapp/signup/status", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
       const data = await response.json();
 
       console.log("[WhatsApp Signup] Status response:", data);
@@ -63,7 +77,7 @@ export function useWhatsAppSignup() {
     } catch (err) {
       console.error("[WhatsApp Signup] ❌ Error checking status:", err);
     }
-  }, []);
+  }, [accessToken]);
 
   // Initialize Facebook SDK on mount
   useEffect(() => {
@@ -101,7 +115,14 @@ export function useWhatsAppSignup() {
       setIsLoading(true);
       setError(null);
 
+      if (!accessToken) {
+        throw new Error("Not authenticated");
+      }
+
       const response = await fetch("/api/whatsapp/signup/initiate", {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
         method: "POST",
       });
 
@@ -166,9 +187,14 @@ export function useWhatsAppSignup() {
               "[WhatsApp Signup] ✅ Auth response with code received"
             );
 
+            // Get user ID from config (set by backend via JWT)
+            const userId = signupConfig.userId;
+            console.log("[WhatsApp Signup] User ID:", userId);
+
             const payload = {
               code: response.authResponse.code,
               state: signupConfig.state,
+              userId,
             };
 
             console.log(

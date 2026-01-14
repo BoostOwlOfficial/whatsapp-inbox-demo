@@ -17,12 +17,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import Image from "next/image";
 
-export default function LoginPage() {
+export default function RegisterPage() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { register, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -34,12 +36,18 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      await login(email, password);
+      await register(email, password, name);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setError(err instanceof Error ? err.message : "Registration failed");
       setIsLoading(false);
     }
   };
@@ -70,13 +78,11 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Login Card */}
+        {/* Register Card */}
         <Card className="border-green-100 shadow-xl">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl">Welcome back</CardTitle>
-            <CardDescription>
-              Sign in to access your WhatsApp inbox
-            </CardDescription>
+            <CardTitle className="text-2xl">Create an account</CardTitle>
+            <CardDescription>Get started with WhatsApp Inbox</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -89,6 +95,25 @@ export default function LoginPage() {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="name"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Full Name
+                </label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="h-11"
+                  disabled={isLoading}
+                />
+              </div>
 
               <div className="space-y-2">
                 <label
@@ -119,9 +144,28 @@ export default function LoginPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Min. 8 characters with uppercase, lowercase, number"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="h-11"
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="confirmPassword"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  Confirm Password
+                </label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   className="h-11"
                   disabled={isLoading}
@@ -136,20 +180,20 @@ export default function LoginPage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
+                    Creating account...
                   </>
                 ) : (
-                  "Sign in"
+                  "Create account"
                 )}
               </Button>
 
               <p className="text-center text-sm text-gray-600 mt-4">
-                Don't have an account?{" "}
+                Already have an account?{" "}
                 <Link
-                  href="/register"
+                  href="/login"
                   className="text-green-600 hover:underline font-medium"
                 >
-                  Sign up
+                  Sign in
                 </Link>
               </p>
             </form>

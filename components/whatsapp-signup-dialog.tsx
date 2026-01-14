@@ -70,39 +70,92 @@ export function WhatsAppSignupDialog({
           )}
 
           {accountStatus?.connected && accountStatus.account ? (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
-                <div className="flex-1 space-y-1">
-                  <p className="font-medium text-green-900">
-                    {accountStatus.account.display_name || "Connected"}
-                  </p>
-                  <p className="text-sm text-green-700">
-                    {accountStatus.account.phone_number}
-                  </p>
-                  {accountStatus.account.quality_rating && (
-                    <p className="text-xs text-green-600">
-                      Quality: {accountStatus.account.quality_rating}
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <div className="bg-green-100 rounded-full p-2 mt-1">
+                    <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <p className="font-semibold text-green-900 text-lg">
+                      {accountStatus.account.display_name}
                     </p>
-                  )}
+                    <p className="text-sm text-green-700 font-medium">
+                      {accountStatus.account.phone_number}
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-green-700 font-medium">
+                        Quality:
+                      </span>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
+                          accountStatus.account.quality_rating === "GREEN"
+                            ? "bg-green-100 text-green-800 border border-green-300"
+                            : accountStatus.account.quality_rating === "YELLOW"
+                            ? "bg-yellow-100 text-yellow-800 border border-yellow-300"
+                            : "bg-red-100 text-red-800 border border-red-300"
+                        }`}
+                      >
+                        {accountStatus.account.quality_rating}
+                      </span>
+                    </div>
+
+                    {accountStatus.account.connected_at && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Connected on{" "}
+                        {new Date(
+                          accountStatus.account.connected_at
+                        ).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
                 </div>
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  onClick={handleSignup}
+                  disabled={isLoading}
+                  className="w-full border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    "Change Connected Account"
+                  )}
+                </Button>
+                <p className="text-xs text-slate-500 text-center mt-2">
+                  Use this to switch to a different WhatsApp Business account
+                </p>
               </div>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="text-sm text-slate-600 space-y-2">
-                <p className="font-medium">What you'll need:</p>
-                <ul className="list-disc list-inside space-y-1 ml-2">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-900">
+                  Connect your WhatsApp Business account to start receiving and
+                  sending messages directly from this inbox.
+                </p>
+              </div>
+
+              <div className="text-sm text-slate-600 space-y-2 px-1">
+                <p className="font-medium">You will need:</p>
+                <ul className="list-disc list-inside space-y-1 ml-2 text-slate-500">
                   <li>A Facebook Business account</li>
                   <li>A WhatsApp Business account</li>
-                  <li>Verified phone number</li>
+                  <li>A verified phone number</li>
                 </ul>
               </div>
 
               <Button
                 onClick={handleSignup}
-                disabled={isLoading || !sdkReady}
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                disabled={isLoading}
+                className="w-full bg-green-600 hover:bg-green-700 text-white shadow-sm"
               >
                 {isLoading ? (
                   <>

@@ -1,76 +1,158 @@
-"use client"
+"use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
-import { useRouter } from "next/navigation"
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from "react";
+import { useRouter } from "next/navigation";
 
 interface User {
-    username: string
-    name: string
+  id: string;
+  email: string;
+  name: string;
 }
 
 interface AuthContextType {
-    user: User | null
-    isAuthenticated: boolean
-    login: (username: string, password: string) => boolean
-    logout: () => void
-    isLoading: boolean
+  user: User | null;
+  accessToken: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, name: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshAuth: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-    const [user, setUser] = useState<User | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
-    const router = useRouter()
+  const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
-    useEffect(() => {
-        // Check if user is already logged in
-        const savedUser = localStorage.getItem("whatsapp_user")
-        if (savedUser) {
-            setUser(JSON.parse(savedUser))
-        }
-        setIsLoading(false)
-    }, [])
+  // Refresh access token using refresh token
+  const refreshAuth = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/refresh", {
+        method: "POST",
+        credentials: "include", // Include cookies
+      });
 
-    const login = (username: string, password: string): boolean => {
-        // Login credentials
-        if (username === "tmayank85" && password === "tmayank85") {
-            const newUser = {
-                username: "tmayank85",
-                name: "Mayank Tyagi",
-            }
-            setUser(newUser)
-            localStorage.setItem("whatsapp_user", JSON.stringify(newUser))
-            return true
-        }
-        return false
+      if (response.ok) {
+        const data = await response.json();
+        setUser(data.user);
+        setAccessToken(data.accessToken);
+      } else {
+        // Refresh token invalid or expired
+        setUser(null);
+        setAccessToken(null);
+      }
+    } catch (error) {
+      console.error("[Auth] Refresh error:", error);
+      setUser(null);
+      setAccessToken(null);
+    }
+  }, []);
+
+  // Initialize auth on mount
+  useEffect(() => {
+    refreshAuth().finally(() => setIsLoading(false));
+  }, [refreshAuth]);
+
+  // Set up automatic token refresh (every 14 minutes)
+  useEffect(() => {
+    if (!accessToken) return;
+
+    const interval = setInterval(() => {
+      refreshAuth();
+    }, 14 * 60 * 1000); // 14 minutes
+
+    return () => clearInterval(interval);
+  }, [accessToken, refreshAuth]);
+
+  const login = async (email: string, password: string) => {
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      credentials: "include",
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Login failed");
     }
 
-    const logout = () => {
-        setUser(null)
-        localStorage.removeItem("whatsapp_user")
-        router.push("/login")
+    setUser(data.user);
+    setAccessToken(data.accessToken);
+    router.push("/");
+  };
+
+  const register = async (email: string, password: string, name: string) => {
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, name }),
+      credentials: "include",
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || "Registration failed");
     }
 
-    return (
-        <AuthContext.Provider
-            value={{
-                user,
-                isAuthenticated: !!user,
-                login,
-                logout,
-                isLoading,
-            }}
-        >
-            {children}
-        </AuthContext.Provider>
-    )
+    setUser(data.user);
+    setAccessToken(data.accessToken);
+    router.push("/");
+  };
+
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        credentials: "include",
+      });
+    } catch (error) {
+      console.error("[Auth] Logout error:", error);
+    }
+
+    setUser(null);
+    setAccessToken(null);
+    router.push("/login");
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        accessToken,
+        isAuthenticated: !!user,
+        isLoading,
+        login,
+        register,
+        logout,
+        refreshAuth,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
-    const context = useContext(AuthContext)
-    if (context === undefined) {
-        throw new Error("useAuth must be used within an AuthProvider")
-    }
-    return context
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
+  return context;
 }

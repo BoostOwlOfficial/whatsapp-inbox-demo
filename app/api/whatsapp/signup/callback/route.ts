@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     console.log("[Callback] Request body:", JSON.stringify(body, null, 2));
 
-    const { code, state } = body;
+    const { code, state, userId } = body;
 
     // Validate required params
     if (!code) {
@@ -44,6 +44,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    console.log("[Callback] Code received, will get user from JWT token later");
 
     // Validate state parameter (CSRF protection)
     const stateCookie = request.cookies.get("whatsapp_signup_state");
@@ -209,9 +211,8 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 60);
 
-    // Get current user ID from auth context
-    // In production, you'd get this from your auth system
-    const userId = request.headers.get("x-user-id") || null;
+    // User ID was sent in the request body from frontend
+    console.log("[Callback] Using user ID from body:", userId);
 
     // Insert WhatsApp account
     const accountData: WhatsAppAccountInsert = {
