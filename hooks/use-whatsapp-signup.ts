@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
+import { useFacebookSDK } from "./use-facebook-sdk";
 
 interface SignupConfig {
   appId: string;
@@ -45,6 +46,7 @@ export function useWhatsAppSignup() {
     null
   );
   const [config, setConfig] = useState<SignupConfig | null>(null);
+  const { sdkLoaded, sdkError } = useFacebookSDK();
 
   const checkStatus = useCallback(async () => {
     try {
@@ -98,6 +100,16 @@ export function useWhatsAppSignup() {
     try {
       setIsLoading(true);
       setError(null);
+
+      // Check for SDK errors first
+      if (sdkError) {
+        throw new Error(sdkError);
+      }
+
+      // Wait for SDK to load if not loaded yet
+      if (!sdkLoaded) {
+        throw new Error("Facebook SDK is still loading. Please try again.");
+      }
 
       // Initialize if not already done
       const signupConfig = config || (await initializeSignup());
@@ -180,13 +192,14 @@ export function useWhatsAppSignup() {
       setIsLoading(false);
       throw err;
     }
-  }, [config, initializeSignup, checkStatus]);
+  }, [config, initializeSignup, checkStatus, sdkLoaded, sdkError]);
 
   return {
     isLoading,
-    error,
+    error: error || sdkError,
     accountStatus,
     launchSignup,
     checkStatus,
+    sdkLoaded,
   };
 }
