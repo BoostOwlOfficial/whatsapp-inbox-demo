@@ -110,7 +110,9 @@ export async function POST(request: NextRequest) {
 
     // For WhatsApp Embedded Signup, the access token is scoped to the WABA
     // Use debug_token to get information about the token and WABA
-    const debugTokenUrl = `https://graph.facebook.com/${graphApiVersion}/debug_token?input_token=${accessToken}&access_token=${accessToken}`;
+    // We need an app access token for this (not the user token)
+    const appAccessToken = `${appId}|${appSecret}`;
+    const debugTokenUrl = `https://graph.facebook.com/${graphApiVersion}/debug_token?input_token=${accessToken}&access_token=${appAccessToken}`;
     const debugResponse = await fetch(debugTokenUrl);
 
     if (!debugResponse.ok) {
