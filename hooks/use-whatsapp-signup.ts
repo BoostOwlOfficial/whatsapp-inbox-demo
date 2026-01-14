@@ -156,13 +156,53 @@ export function useWhatsAppSignup() {
       const fbLoginCallback = async (response: any) => {
         try {
           console.log("[WhatsApp Signup] Processing Facebook response...");
+          console.log(
+            "[WhatsApp Signup] Full response object:",
+            JSON.stringify(response, null, 2)
+          );
 
           if (response.authResponse) {
             console.log("[WhatsApp Signup] ✅ Auth response received");
+            console.log(
+              "[WhatsApp Signup] authResponse details:",
+              JSON.stringify(response.authResponse, null, 2)
+            );
+
             const { code, accessToken } = response.authResponse;
+
+            console.log("[WhatsApp Signup] Extracted values:", {
+              code: code || "MISSING",
+              accessToken: accessToken || "MISSING",
+              access_token: response.authResponse.access_token || "MISSING",
+              granted_scopes: response.authResponse.granted_scopes,
+              userID: response.authResponse.userID,
+              data_access_expiration_time:
+                response.authResponse.data_access_expiration_time,
+              graphDomain: response.authResponse.graphDomain,
+              allKeys: Object.keys(response.authResponse),
+            });
 
             // Send to our callback endpoint
             console.log("[WhatsApp Signup] Sending to callback endpoint...");
+
+            const payload = {
+              code: code || response.authResponse.code,
+              accessToken: accessToken || response.authResponse.access_token,
+              wabaId: response.authResponse.granted_scopes?.includes(
+                "whatsapp_business_management"
+              )
+                ? response.authResponse.userID
+                : undefined,
+              phoneNumberId: response.authResponse.data_access_expiration_time,
+              businessAccountId: response.authResponse.graphDomain,
+              state: signupConfig.state,
+            };
+
+            console.log(
+              "[WhatsApp Signup] Sending payload:",
+              JSON.stringify(payload, null, 2)
+            );
+
             const callbackResponse = await fetch(
               "/api/whatsapp/signup/callback",
               {
@@ -170,20 +210,7 @@ export function useWhatsAppSignup() {
                 headers: {
                   "Content-Type": "application/json",
                 },
-                body: JSON.stringify({
-                  code,
-                  accessToken:
-                    accessToken || response.authResponse.access_token,
-                  wabaId: response.authResponse.granted_scopes?.includes(
-                    "whatsapp_business_management"
-                  )
-                    ? response.authResponse.userID
-                    : undefined,
-                  phoneNumberId:
-                    response.authResponse.data_access_expiration_time,
-                  businessAccountId: response.authResponse.graphDomain,
-                  state: signupConfig.state,
-                }),
+                body: JSON.stringify(payload),
               }
             );
 
