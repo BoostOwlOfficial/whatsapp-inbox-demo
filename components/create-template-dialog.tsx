@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useSettings } from "@/lib/settings-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -37,7 +36,6 @@ interface CreateTemplateDialogProps {
 }
 
 export function CreateTemplateDialog({ open, onOpenChange, onSuccess }: CreateTemplateDialogProps) {
-    const { accessToken, wabaId, apiVersion } = useSettings()
 
     // Basic info
     const [name, setName] = useState("")

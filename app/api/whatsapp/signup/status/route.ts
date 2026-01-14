@@ -49,6 +49,7 @@ async function handleGetStatus(request: NextRequest) {
       account: {
         id: account.id,
         phone_number: account.phone_number,
+        phone_number_id: account.phone_number_id,
         display_name: account.display_name,
         quality_rating: account.quality_rating,
         connected_at: account.connected_at,

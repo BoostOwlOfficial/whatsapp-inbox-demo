@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ProtectedRoute } from "@/components/protected-route"
 import { useAuth } from "@/lib/auth-context"
-import { useSettings } from "@/lib/settings-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -33,7 +32,6 @@ import {
 
 export default function TemplatesPage() {
     const { user } = useAuth()
-    const { accessToken, wabaId, apiVersion } = useSettings()
     const router = useRouter()
     const [templates, setTemplates] = useState<Template[]>([])
     const [loading, setLoading] = useState(true)
@@ -95,22 +93,13 @@ export default function TemplatesPage() {
 
     const handleRefresh = () => {
         // Refetch templates after creating a new one
-        if (accessToken && wabaId) {
-            const params = new URLSearchParams({
-                wabaId,
-                apiVersion: apiVersion || "v21.0",
+        fetch(`/api/templates`)
+            .then(res => res.json())
+            .then(data => {
+                const transformed = data.templates.map((t: WhatsAppTemplate) => transformTemplateForUI(t))
+                setTemplates(transformed)
             })
-
-            fetch(`/api/templates?${params.toString()}`, {
-                headers: { Authorization: `Bearer ${accessToken}` },
-            })
-                .then(res => res.json())
-                .then(data => {
-                    const transformed = data.templates.map((t: WhatsAppTemplate) => transformTemplateForUI(t))
-                    setTemplates(transformed)
-                })
-                .catch(console.error)
-        }
+            .catch(console.error)
     }
 
     const handleDeleteTemplate = (id: string) => {

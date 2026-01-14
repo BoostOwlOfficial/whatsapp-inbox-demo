@@ -10,6 +10,7 @@ export interface WhatsAppAccountStatus {
     account: {
         id: string
         phone_number: string
+        phone_number_id: string
         display_name: string
         quality_rating: string
         connected_at: string
@@ -18,10 +19,20 @@ export interface WhatsAppAccountStatus {
 
 /**
  * Check if user has a connected WhatsApp account
+ * @param accessToken - JWT access token for authentication
  */
-export async function checkWhatsAppStatus(): Promise<WhatsAppAccountStatus> {
+export async function checkWhatsAppStatus(accessToken?: string): Promise<WhatsAppAccountStatus> {
     try {
-        const response = await fetch('/api/whatsapp/signup/status')
+        const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+        }
+
+        // Add authorization header if token is provided
+        if (accessToken) {
+            headers['Authorization'] = `Bearer ${accessToken}`
+        }
+
+        const response = await fetch('/api/whatsapp/signup/status', { headers })
         const data = await response.json()
 
         if (!data.success) {

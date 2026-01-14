@@ -48,6 +48,7 @@ export function useWhatsAppSignup() {
         console.warn(
           "[WhatsApp Signup] No access token, skipping status check"
         );
+        setAccountStatus({ connected: false, account: null });
         return;
       }
 
@@ -56,24 +57,24 @@ export function useWhatsAppSignup() {
           Authorization: `Bearer ${accessToken}`,
         },
       });
+
+      if (!response.ok) {
+        throw new Error(`Failed to check status: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
-      console.log("[WhatsApp Signup] Status response:", data);
-
-      if (data.success) {
-        setAccountStatus({
-          connected: data.connected,
-          account: data.account,
-        });
-        console.log(
-          "[WhatsApp Signup] Account status updated:",
-          data.connected ? "Connected" : "Not connected"
-        );
-      } else {
-        console.warn(
-          "[WhatsApp Signup] ⚠️ Status check returned success=false"
-        );
+      if (!data.success) {
+        throw new Error(data.error || "Failed to check account status");
       }
+
+      const status: AccountStatus = {
+        connected: data.connected,
+        account: data.account,
+      };
+
+      setAccountStatus(status);
+      console.log("[WhatsApp Signup] Status:", status);
     } catch (err) {
       console.error("[WhatsApp Signup] ❌ Error checking status:", err);
     }

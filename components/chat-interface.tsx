@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSettings } from "@/lib/settings-context"
 import { useMessages } from "@/hooks/use-messages"
 import { ConversationList } from "./conversation-list"
 import { ChatWindow } from "./chat-window"
@@ -10,7 +9,6 @@ import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export function ChatInterface() {
-  const { accessToken, apiVersion } = useSettings()
   const [selectedPhoneId, setSelectedPhoneId] = useState<string>("")
   const [phoneNumbers, setPhoneNumbers] = useState<any[]>([])
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null)

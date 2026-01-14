@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { AuthProvider } from "@/lib/auth-context";
-import { SettingsProvider } from "@/lib/settings-context";
 import { MessagesProvider } from "@/lib/messages-context";
 import "./globals.css";
 
@@ -41,21 +40,36 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`font-sans antialiased`}>
-        {/* Facebook SDK loaded via lib/facebook-sdk.ts utility */}
+        {/* Facebook SDK for WhatsApp Embedded Signup */}
         <script
-          async
-          defer
-          crossOrigin="anonymous"
-          src="https://connect.facebook.net/en_US/sdk.js"
-        ></script>
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.fbAsyncInit = function() {
+                FB.init({
+                  appId: '2074250006740949',
+                  autoLogAppEvents: true,
+                  xfbml: true,
+                  version: 'v24.0'
+                });
+              };
+
+              // Load the JavaScript SDK asynchronously
+              (function(d, s, id) {
+                var js, fjs = d.getElementsByTagName(s)[0];
+                if (d.getElementById(id)) return;
+                js = d.createElement(s); js.id = id;
+                js.src = "https://connect.facebook.net/en_US/sdk.js";
+                fjs.parentNode.insertBefore(js, fjs);
+              }(document, 'script', 'facebook-jssdk'));
+            `,
+          }}
+        />
 
         <AuthProvider>
-          <SettingsProvider>
-            <MessagesProvider>
-              {children}
-              <Analytics />
-            </MessagesProvider>
-          </SettingsProvider>
+          <MessagesProvider>
+            {children}
+            <Analytics />
+          </MessagesProvider>
         </AuthProvider>
       </body>
     </html>

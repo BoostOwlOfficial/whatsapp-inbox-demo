@@ -18,7 +18,8 @@ import {
   Contact,
 } from "./whatsapp-api";
 import { WhatsAppMessage } from "./supabase";
-import { useSettings } from "./settings-context";
+import { checkWhatsAppStatus } from "./whatsapp-client";
+import { useAuth } from "./auth-context";
 
 export interface Message {
   id: string;
@@ -33,6 +34,7 @@ interface MessagesContextType {
   messages: WhatsAppMessage[];
   conversations: Conversation[];
   contacts: Contact[];
+  phoneNumberId: string | null;
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
@@ -46,7 +48,8 @@ const MessagesContext = createContext<MessagesContextType | undefined>(
 );
 
 export function MessagesProvider({ children }: { children: ReactNode }) {
-  const { phoneNumberId } = useSettings();
+  const { accessToken } = useAuth();
+  const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -61,6 +64,30 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
+
+  // Get phone number from WhatsApp account on mount
+  useEffect(() => {
+    async function loadPhoneNumber() {
+      if (!accessToken) {
+        console.log("[Messages] No access token, skipping WhatsApp check");
+        return;
+      }
+
+      try {
+        console.log("[Messages] Loading WhatsApp phone number...");
+        const status = await checkWhatsAppStatus(accessToken);
+        if (status.connected && status.account && status.account.phone_number_id) {
+          console.log("[Messages] Connected phone:", status.account.phone_number_id);
+          setPhoneNumberId(status.account.phone_number_id);
+        } else {
+          console.log("[Messages] No WhatsApp account connected");
+        }
+      } catch (err) {
+        console.error("[Messages] Error loading WhatsApp account:", err);
+      }
+    }
+    loadPhoneNumber();
+  }, [accessToken]);
 
   // Function to fetch and group messages
   const fetchAndGroupMessages = useCallback(async (phoneId: string) => {
@@ -170,10 +197,8 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
 
           if (uniqueNewMessages.length > 0) {
             console.log(
-              `📝 Adding ${
-                uniqueNewMessages.length
-              } unique messages (filtered ${
-                newMessages.length - uniqueNewMessages.length
+              `📝 Adding ${uniqueNewMessages.length
+              } unique messages (filtered ${newMessages.length - uniqueNewMessages.length
               } duplicates)`
             );
 
@@ -317,6 +342,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         messages,
         conversations,
         contacts,
+        phoneNumberId,
         loading,
         error,
         refetch,

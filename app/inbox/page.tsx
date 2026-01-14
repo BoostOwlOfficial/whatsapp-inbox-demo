@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { useSettings } from "@/lib/settings-context"
 import { useMessagesContext } from "@/lib/messages-context"
 import { sendMessage } from "@/lib/whatsapp-api"
 import type { Conversation } from "@/lib/whatsapp-api"
@@ -28,18 +27,26 @@ import {
     AlertCircle,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 
 export default function InboxPage() {
-    const { phoneNumberId, accessToken, apiVersion } = useSettings()
     const [myPhoneNumber, setMyPhoneNumber] = useState("")
 
     // Use global messages context instead of hook
-    const { conversations, loading, error, refetch, addOptimisticMessage, updateMessageId } = useMessagesContext()
+    const { conversations, loading, error, refetch, addOptimisticMessage, updateMessageId, phoneNumberId } = useMessagesContext()
 
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
     const [messageInput, setMessageInput] = useState("")
     const [activeTab, setActiveTab] = useState<"open" | "unread" | "my_chats">("open")
     const [sending, setSending] = useState(false)
+    const [showNewChatDialog, setShowNewChatDialog] = useState(false)
+    const [newChatPhone, setNewChatPhone] = useState("")
 
     // Ref for auto-scroll to latest message
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -72,9 +79,45 @@ export default function InboxPage() {
         }
     }, [selectedConversation?.messages])
 
+    const handleStartNewChat = () => {
+        if (!newChatPhone.trim() || !phoneNumberId) return
+
+        // Format phone number (remove spaces, dashes, etc.)
+        const formattedPhone = newChatPhone.replace(/[^0-9+]/g, '')
+
+        // Check if conversation already exists
+        const existingConv = conversations.find(c => c.recipientPhone === formattedPhone)
+        if (existingConv) {
+            setSelectedConversation(existingConv)
+            setShowNewChatDialog(false)
+            setNewChatPhone("")
+            return
+        }
+
+        // Create new conversation
+        const newConv: Conversation = {
+            id: `${phoneNumberId}-${formattedPhone}`,
+            recipientPhone: formattedPhone,
+            senderPhone: myPhoneNumber || phoneNumberId,
+            contactName: formattedPhone, // Will be updated when first message is sent
+            messages: [],
+            unread: false,
+            tags: [],
+            createdAt: new Date().toISOString(),
+            leadStatus: "new",
+            notes: "",
+            archived: false,
+        }
+
+        // Select the new conversation
+        setSelectedConversation(newConv)
+        setShowNewChatDialog(false)
+        setNewChatPhone("")
+    }
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!messageInput.trim() || !selectedConversation || !accessToken || !phoneNumberId) return
+        if (!messageInput.trim() || !selectedConversation || !phoneNumberId) return
 
         const messageText = messageInput.trim()
         setMessageInput("") // Clear input immediately
@@ -101,13 +144,13 @@ export default function InboxPage() {
             // Add to UI immediately
             addOptimisticMessage(optimisticMessage)
 
-            // Send message in background
+            // Send message in background - API will fetch credentials from DB
             const result = await sendMessage({
-                accessToken,
+                accessToken: "", // Not needed - API fetches from DB
                 phoneNumberId,
                 recipientPhone: selectedConversation.recipientPhone,
                 message: messageText,
-                apiVersion: apiVersion || "v21.0",
+                apiVersion: "v21.0",
                 senderPhone: myPhoneNumber,
             })
 
@@ -148,7 +191,7 @@ export default function InboxPage() {
     })
 
     // Show configuration prompt if settings not configured
-    if (!phoneNumberId || !accessToken) {
+    if (!phoneNumberId) {
         return (
             <ProtectedRoute>
                 <div className="flex h-full items-center justify-center bg-slate-50">
@@ -156,7 +199,7 @@ export default function InboxPage() {
                         <AlertCircle className="h-16 w-16 text-orange-500 mx-auto mb-4" />
                         <h2 className="text-2xl font-bold text-slate-900 mb-2">WhatsApp Not Configured</h2>
                         <p className="text-slate-600 mb-6">
-                            Please configure your WhatsApp Business API credentials in Settings to start using the Inbox.
+                            Please connect your WhatsApp Business account in Settings to start using the Inbox.
                         </p>
                         <Button onClick={() => window.location.href = "/settings"} className="bg-green-600 hover:bg-green-700">
                             Go to Settings
@@ -181,6 +224,15 @@ export default function InboxPage() {
                                 className="pl-9 bg-white border-slate-200 focus-visible:ring-green-500 h-9 text-sm"
                             />
                         </div>
+
+                        {/* New Chat Button */}
+                        <Button
+                            onClick={() => setShowNewChatDialog(true)}
+                            className="w-full bg-green-600 hover:bg-green-700 h-9 text-sm"
+                        >
+                            <Plus className="mr-2 h-4 w-4" />
+                            New Chat
+                        </Button>
 
                         {/* Tabs */}
                         <div className="flex gap-2">
@@ -404,6 +456,55 @@ export default function InboxPage() {
                     </div>
                 )}
             </div>
+
+            {/* New Chat Dialog */}
+            <Dialog open={showNewChatDialog} onOpenChange={setShowNewChatDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Start New Chat</DialogTitle>
+                        <DialogDescription>
+                            Enter a phone number to start a new conversation
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Phone Number</label>
+                            <Input
+                                value={newChatPhone}
+                                onChange={(e) => setNewChatPhone(e.target.value)}
+                                placeholder="+1234567890"
+                                onKeyPress={(e) => {
+                                    if (e.key === 'Enter') {
+                                        handleStartNewChat()
+                                    }
+                                }}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Include country code (e.g., +1 for US, +91 for India)
+                            </p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            className="flex-1"
+                            onClick={() => {
+                                setShowNewChatDialog(false)
+                                setNewChatPhone("")
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            onClick={handleStartNewChat}
+                            disabled={!newChatPhone.trim()}
+                        >
+                            Start Chat
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </ProtectedRoute>
     )
 }
