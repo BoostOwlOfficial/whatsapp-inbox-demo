@@ -60,9 +60,6 @@ export async function POST(request: NextRequest) {
     // Exchange authorization code for access token
     const appId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID || "2074250006740949";
     const appSecret = process.env.FACEBOOK_APP_SECRET;
-    const redirectUri =
-      process.env.FACEBOOK_REDIRECT_URL ||
-      "https://business.facebook.com/messaging/whatsapp/onboard/";
 
     if (!appSecret) {
       console.error("[Callback] FACEBOOK_APP_SECRET not configured");
@@ -71,12 +68,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tokenUrl = `https://graph.facebook.com/v24.0/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&code=${code}&redirect_uri=${encodeURIComponent(
-      redirectUri
-    )}`;
+    // Use POST with JSON body as per Facebook OAuth documentation
+    const tokenUrl = "https://graph.facebook.com/v24.0/oauth/access_token";
 
     console.log("[Callback] Fetching access token from Facebook...");
-    const tokenResponse = await fetch(tokenUrl);
+    const tokenResponse = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        client_id: appId,
+        client_secret: appSecret,
+        code: code,
+        grant_type: "authorization_code",
+      }),
+    });
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text();
