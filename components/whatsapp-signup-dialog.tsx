@@ -22,7 +22,7 @@ export function WhatsAppSignupDialog({
   open,
   onOpenChange,
 }: WhatsAppSignupDialogProps) {
-  const { isLoading, error, accountStatus, launchSignup, sdkLoaded } =
+  const { isLoading, error, accountStatus, launchSignup, sdkReady } =
     useWhatsAppSignup();
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -101,7 +101,7 @@ export function WhatsAppSignupDialog({
 
               <Button
                 onClick={handleSignup}
-                disabled={isLoading || !sdkLoaded}
+                disabled={isLoading || !sdkReady}
                 className="w-full bg-green-600 hover:bg-green-700 text-white"
               >
                 {isLoading ? (
@@ -109,7 +109,7 @@ export function WhatsAppSignupDialog({
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Connecting...
                   </>
-                ) : !sdkLoaded ? (
+                ) : !sdkReady ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Loading SDK...
