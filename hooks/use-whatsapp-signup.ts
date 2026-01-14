@@ -157,52 +157,26 @@ export function useWhatsAppSignup() {
         try {
           console.log("[WhatsApp Signup] Processing Facebook response...");
           console.log(
-            "[WhatsApp Signup] Full response object:",
+            "[WhatsApp Signup] Full response:",
             JSON.stringify(response, null, 2)
           );
 
-          if (response.authResponse) {
-            console.log("[WhatsApp Signup] ✅ Auth response received");
+          if (response.authResponse && response.authResponse.code) {
             console.log(
-              "[WhatsApp Signup] authResponse details:",
-              JSON.stringify(response.authResponse, null, 2)
+              "[WhatsApp Signup] ✅ Auth response with code received"
             );
 
-            const { code, accessToken } = response.authResponse;
-
-            console.log("[WhatsApp Signup] Extracted values:", {
-              code: code || "MISSING",
-              accessToken: accessToken || "MISSING",
-              access_token: response.authResponse.access_token || "MISSING",
-              granted_scopes: response.authResponse.granted_scopes,
-              userID: response.authResponse.userID,
-              data_access_expiration_time:
-                response.authResponse.data_access_expiration_time,
-              graphDomain: response.authResponse.graphDomain,
-              allKeys: Object.keys(response.authResponse),
-            });
-
-            // Send to our callback endpoint
-            console.log("[WhatsApp Signup] Sending to callback endpoint...");
-
             const payload = {
-              code: code || response.authResponse.code,
-              accessToken: accessToken || response.authResponse.access_token,
-              wabaId: response.authResponse.granted_scopes?.includes(
-                "whatsapp_business_management"
-              )
-                ? response.authResponse.userID
-                : undefined,
-              phoneNumberId: response.authResponse.data_access_expiration_time,
-              businessAccountId: response.authResponse.graphDomain,
+              code: response.authResponse.code,
               state: signupConfig.state,
             };
 
             console.log(
-              "[WhatsApp Signup] Sending payload:",
-              JSON.stringify(payload, null, 2)
+              "[WhatsApp Signup] Sending payload to backend:",
+              payload
             );
 
+            // Send to our callback endpoint - backend will handle token exchange
             const callbackResponse = await fetch(
               "/api/whatsapp/signup/callback",
               {
@@ -234,9 +208,11 @@ export function useWhatsAppSignup() {
             );
             await checkStatus();
           } else {
-            const error = new Error("Facebook auth failed - no auth response");
+            const error = new Error(
+              "Facebook auth failed - no authorization code received"
+            );
             console.error("[WhatsApp Signup] ❌", error.message);
-            console.error("[WhatsApp Signup] Full response:", response);
+            console.error("[WhatsApp Signup] Response received:", response);
             throw error;
           }
         } catch (err) {
