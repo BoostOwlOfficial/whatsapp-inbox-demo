@@ -23,6 +23,8 @@ interface DecryptedCredentials {
  */
 export async function getWhatsAppCredentials(userId?: string | null): Promise<DecryptedCredentials | null> {
     try {
+        console.log('🔎 getWhatsAppCredentials called with userId:', userId)
+
         // Build query
         let query = supabase
             .from('whatsapp_accounts')
@@ -36,18 +38,23 @@ export async function getWhatsAppCredentials(userId?: string | null): Promise<De
 
         // Add user filter if provided
         if (userId) {
+            console.log('🔍 Filtering by user_id:', userId)
             query = query.eq('user_id', userId)
+        } else {
+            console.log('⚠️ No userId provided, querying all accounts')
         }
 
         const { data: accounts, error } = await query
 
         if (error) {
-            console.error('Error fetching WhatsApp account:', error)
+            console.error('❌ Database error fetching WhatsApp account:', error)
             throw new Error('Failed to fetch WhatsApp account')
         }
 
+        console.log('📊 Query result - accounts found:', accounts?.length || 0)
+
         if (!accounts || accounts.length === 0) {
-            console.log('No active WhatsApp account found')
+            console.log('⚠️ No active WhatsApp account found for userId:', userId)
             return null
         }
 

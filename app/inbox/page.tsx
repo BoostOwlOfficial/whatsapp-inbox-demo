@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useMessagesContext } from "@/lib/messages-context"
+import { useAuth } from "@/lib/auth-context"
 import { sendMessage } from "@/lib/whatsapp-api"
 import type { Conversation } from "@/lib/whatsapp-api"
 import {
@@ -40,6 +41,7 @@ export default function InboxPage() {
 
     // Use global messages context instead of hook
     const { conversations, loading, error, refetch, addOptimisticMessage, updateMessageId, phoneNumberId } = useMessagesContext()
+    const { accessToken } = useAuth()
 
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
     const [messageInput, setMessageInput] = useState("")
@@ -144,9 +146,12 @@ export default function InboxPage() {
             // Add to UI immediately
             addOptimisticMessage(optimisticMessage)
 
+            // Debug: Check if we have access token
+            console.log('📱 Sending message. Access token available:', !!accessToken)
+
             // Send message in background - API will fetch credentials from DB
             const result = await sendMessage({
-                accessToken: "", // Not needed - API fetches from DB
+                accessToken: accessToken || "",
                 phoneNumberId,
                 recipientPhone: selectedConversation.recipientPhone,
                 message: messageText,

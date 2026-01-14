@@ -1,10 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { getWhatsAppCredentials, getWhatsAppApiVersion } from "@/lib/whatsapp-credentials"
+import { verifyAccessToken } from "@/lib/auth/jwt"
 
 export async function POST(request: NextRequest) {
+  // Get authorization header
+  const authHeader = request.headers.get("authorization")
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  // Verify JWT token
+  const token = authHeader.substring(7)
+  const decoded = verifyAccessToken(token)
+  if (!decoded) {
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+  }
+
+  const userId = decoded.userId
+  console.log('🔍 Authenticated user ID:', userId)
+
   try {
-    const { recipientPhone, message, userId } = await request.json()
+    const { recipientPhone, message } = await request.json()
 
     // Validate required fields
     if (!recipientPhone || !message) {
@@ -14,12 +31,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get WhatsApp credentials from database
+    // Get WhatsApp credentials from database using authenticated user ID
     let credentials
     try {
+      console.log('📞 Fetching WhatsApp credentials for userId:', userId)
       credentials = await getWhatsAppCredentials(userId)
+
+      if (!credentials) {
+        console.warn('⚠️ No credentials returned (null)')
+        return NextResponse.json(
+          {
+            error: "WhatsApp account not connected",
+            details: "Please connect your WhatsApp Business account first",
+          },
+          { status: 401 }
+        )
+      }
+
+      console.log('✅ Credentials found:', {
+        phoneNumberId: credentials.phoneNumberId,
+        wabaId: credentials.wabaId
+      })
     } catch (error) {
-      console.error("Error fetching credentials:", error)
+      console.error("❌ Error fetching credentials:", error)
       return NextResponse.json(
         {
           error: "WhatsApp account not connected",

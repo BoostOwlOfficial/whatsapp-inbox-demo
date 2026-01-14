@@ -64,16 +64,33 @@ export async function sendMessage(params: {
     apiVersion: string
     senderPhone: string
 }): Promise<{ success: boolean; message_id?: string; error?: string }> {
+    const { accessToken, recipientPhone, message } = params
+
+    console.log('🔐 Sending message with token:', accessToken ? 'Token present' : 'NO TOKEN')
+
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+    }
+
+    if (accessToken) {
+        headers["Authorization"] = `Bearer ${accessToken}`
+        console.log('✅ Authorization header added')
+    } else {
+        console.warn('⚠️ No access token provided!')
+    }
+
     const response = await fetch("/api/send-message", {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify(params),
+        headers,
+        body: JSON.stringify({
+            recipientPhone,
+            message,
+        }),
     })
 
     if (!response.ok) {
         const error = await response.json()
+        console.error('❌ API Error:', error)
         return { success: false, error: error.error || "Failed to send message" }
     }
 
