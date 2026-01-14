@@ -104,33 +104,72 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to obtain access token");
     }
 
-    // Now fetch WhatsApp Business Account details using the access token
+    // Now use the access token to get WhatsApp Business Account details
     console.log("[Callback] Fetching WhatsApp Business Account details...");
     const graphApiVersion = process.env.WHATSAPP_GRAPH_API_VERSION || "v24.0";
 
-    // Get user's WhatsApp Business Accounts
-    const wabaListUrl = `https://graph.facebook.com/${graphApiVersion}/me/businesses?access_token=${accessToken}`;
-    const wabaListResponse = await fetch(wabaListUrl);
+    // For WhatsApp Embedded Signup, the access token is scoped to the WABA
+    // Use debug_token to get information about the token and WABA
+    const debugTokenUrl = `https://graph.facebook.com/${graphApiVersion}/debug_token?input_token=${accessToken}&access_token=${accessToken}`;
+    const debugResponse = await fetch(debugTokenUrl);
 
-    if (!wabaListResponse.ok) {
-      const errorText = await wabaListResponse.text();
-      console.error("[Callback] Failed to fetch businesses:", errorText);
-      throw new Error("Failed to fetch WhatsApp Business Accounts");
+    if (!debugResponse.ok) {
+      const errorText = await debugResponse.text();
+      console.error("[Callback] Failed to debug token:", errorText);
+      throw new Error("Failed to get token information");
     }
 
-    const wabaListData = await wabaListResponse.json();
-    console.log("[Callback] Business accounts:", wabaListData);
+    const debugData = await debugResponse.json();
+    console.log("[Callback] Token debug data:", debugData);
 
-    // Get the first business
-    if (!wabaListData.data || wabaListData.data.length === 0) {
-      throw new Error("No WhatsApp Business Accounts found");
+    // The token data contains granular_scopes which has the WABA ID
+    const granularScopes = debugData.data?.granular_scopes;
+    console.log("[Callback] Granular scopes:", granularScopes);
+
+    // Extract WABA ID from granular scopes
+    let wabaId: string | null = null;
+
+    if (granularScopes) {
+      for (const scope of granularScopes) {
+        if (
+          scope.scope === "whatsapp_business_management" &&
+          scope.target_ids &&
+          scope.target_ids.length > 0
+        ) {
+          wabaId = scope.target_ids[0];
+          break;
+        }
+      }
     }
 
-    const business = wabaListData.data[0];
-    const businessAccountId = business.id;
+    if (!wabaId) {
+      console.error("[Callback] Could not extract WABA ID from token");
+      console.error(
+        "[Callback] Debug data:",
+        JSON.stringify(debugData, null, 2)
+      );
+      throw new Error(
+        "Could not identify WhatsApp Business Account from token"
+      );
+    }
 
-    // Get phone numbers for this business
-    const phoneNumbersUrl = `https://graph.facebook.com/${graphApiVersion}/${businessAccountId}/phone_numbers?access_token=${accessToken}`;
+    console.log("[Callback] WABA ID:", wabaId);
+
+    // Get WABA details
+    const wabaUrl = `https://graph.facebook.com/${graphApiVersion}/${wabaId}?fields=id,name,timezone_id&access_token=${accessToken}`;
+    const wabaResponse = await fetch(wabaUrl);
+
+    if (!wabaResponse.ok) {
+      const errorText = await wabaResponse.text();
+      console.error("[Callback] Failed to fetch WABA details:", errorText);
+      throw new Error("Failed to fetch WhatsApp Business Account details");
+    }
+
+    const wabaData = await wabaResponse.json();
+    console.log("[Callback] WABA data:", wabaData);
+
+    // Get phone numbers for this WABA
+    const phoneNumbersUrl = `https://graph.facebook.com/${graphApiVersion}/${wabaId}/phone_numbers?access_token=${accessToken}`;
     const phoneNumbersResponse = await fetch(phoneNumbersUrl);
 
     if (!phoneNumbersResponse.ok) {
@@ -143,35 +182,23 @@ export async function POST(request: NextRequest) {
     console.log("[Callback] Phone numbers:", phoneNumbersData);
 
     if (!phoneNumbersData.data || phoneNumbersData.data.length === 0) {
-      throw new Error("No phone numbers found for this business");
+      throw new Error(
+        "No phone numbers found for this WhatsApp Business Account"
+      );
     }
 
     const phoneNumber = phoneNumbersData.data[0];
     const phoneNumberId = phoneNumber.id;
-    const wabaId = phoneNumber.waba_id || businessAccountId;
+    const businessAccountId = wabaId;
 
-    // Fetch WhatsApp Business Account details from Graph API
-    // Get phone number details
-    const phoneResponse = await fetch(
-      `https://graph.facebook.com/${graphApiVersion}/${phoneNumberId}?access_token=${accessToken}`
-    );
-
-    if (!phoneResponse.ok) {
-      throw new Error("Failed to fetch phone number details");
-    }
-
-    const phoneData: PhoneNumber = await phoneResponse.json();
-
-    // Get WABA details
-    const wabaResponse = await fetch(
-      `https://graph.facebook.com/${graphApiVersion}/${wabaId}?access_token=${accessToken}`
-    );
-
-    if (!wabaResponse.ok) {
-      throw new Error("Failed to fetch WABA details");
-    }
-
-    const wabaData: WhatsAppBusinessAccount = await wabaResponse.json();
+    // We already have WABA data and phone number data from above
+    // Use the phone number data directly
+    const phoneData: PhoneNumber = {
+      id: phoneNumber.id,
+      display_phone_number: phoneNumber.display_phone_number,
+      verified_name: phoneNumber.verified_name,
+      quality_rating: phoneNumber.quality_rating,
+    };
 
     // Encrypt the access token
     const { encrypted, iv, authTag } = encryptToken(accessToken);
