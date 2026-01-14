@@ -60,18 +60,45 @@ export async function getWhatsAppCredentials(userId?: string | null): Promise<De
 
         const account = accounts[0] as unknown as WhatsAppAccountWithCredentials
 
-        if (!account.whatsapp_credentials || account.whatsapp_credentials.length === 0) {
-            console.error('No credentials found for account:', account.id)
+        console.log('✅ Account found:', {
+            id: account.id,
+            phone_number_id: account.phone_number_id,
+            waba_id: account.waba_id,
+            has_credentials: !!account.whatsapp_credentials
+        })
+
+        console.log('🔍 Credentials data:', account.whatsapp_credentials)
+
+        // Handle both array and object formats from Supabase
+        let credentials: WhatsAppCredential
+        if (Array.isArray(account.whatsapp_credentials)) {
+            console.log('📋 Credentials is an array')
+            if (account.whatsapp_credentials.length === 0) {
+                console.error('❌ Empty credentials array')
+                throw new Error('No credentials found for WhatsApp account')
+            }
+            credentials = account.whatsapp_credentials[0]
+        } else if (account.whatsapp_credentials && typeof account.whatsapp_credentials === 'object') {
+            console.log('📦 Credentials is an object (Supabase one-to-one)')
+            credentials = account.whatsapp_credentials
+        } else {
+            console.error('❌ No credentials found')
             throw new Error('No credentials found for WhatsApp account')
         }
 
-        const credentials = account.whatsapp_credentials[0]
+        console.log('🔐 Credentials object:', {
+            account_id: credentials.account_id,
+            has_encrypted_token: !!credentials.encrypted_access_token,
+            has_iv: !!credentials.encryption_iv,
+            has_auth_tag: !!credentials.encryption_auth_tag,
+            token_expires_at: credentials.token_expires_at
+        })
 
         // Check if token is expired
         if (credentials.token_expires_at) {
             const expiresAt = new Date(credentials.token_expires_at)
             if (expiresAt < new Date()) {
-                console.warn('WhatsApp access token has expired')
+                console.warn('⚠️ WhatsApp access token has expired')
                 // TODO: Implement token refresh logic
                 throw new Error('WhatsApp access token has expired')
             }
