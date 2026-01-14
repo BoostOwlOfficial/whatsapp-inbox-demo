@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
                   message_text: message.text?.body || null,
                   timestamp: parseInt(message.timestamp),
                   status: "received" as const,
+                  direction: "inbound" as const, // Explicitly mark as inbound (received from customer)
                   metadata: {
                     ...metadata,
                     raw_message: message,

@@ -18,7 +18,6 @@ export async function POST(request: NextRequest) {
   }
 
   const userId = decoded.userId
-  console.log('🔍 Authenticated user ID:', userId)
 
   try {
     const { recipientPhone, message } = await request.json()
@@ -122,6 +121,7 @@ export async function POST(request: NextRequest) {
           message_text: message,
           timestamp: Math.floor(Date.now() / 1000),
           status: "sent",
+          direction: "outbound", // Explicitly mark as outbound (sent by us)
           metadata: {
             sent_via: "api",
             whatsapp_response: data,

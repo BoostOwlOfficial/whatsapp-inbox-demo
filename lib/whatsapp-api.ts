@@ -20,7 +20,7 @@ export interface Message {
     to: string
     text: string
     timestamp: number
-    status: "sent" | "delivered" | "read" | "failed"
+    status: "sent" | "delivered" | "read" | "failed" | "received"
     type: "text" | "image" | "document"
 }
 
@@ -66,17 +66,12 @@ export async function sendMessage(params: {
 }): Promise<{ success: boolean; message_id?: string; error?: string }> {
     const { accessToken, recipientPhone, message } = params
 
-    console.log('🔐 Sending message with token:', accessToken ? 'Token present' : 'NO TOKEN')
-
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
     }
 
     if (accessToken) {
         headers["Authorization"] = `Bearer ${accessToken}`
-        console.log('✅ Authorization header added')
-    } else {
-        console.warn('⚠️ No access token provided!')
     }
 
     const response = await fetch("/api/send-message", {
@@ -90,7 +85,6 @@ export async function sendMessage(params: {
 
     if (!response.ok) {
         const error = await response.json()
-        console.error('❌ API Error:', error)
         return { success: false, error: error.error || "Failed to send message" }
     }
 
@@ -108,8 +102,11 @@ export function groupMessagesByConversation(
     const conversationMap = new Map<string, Conversation>()
 
     messages.forEach((msg) => {
-        // Determine the other party (not us)
-        const otherPhone = msg.from_number === myPhoneNumber ? msg.to_number : msg.from_number
+        // Use direction field to determine the other party
+        // For outbound messages, the other party is to_number
+        // For inbound messages, the other party is from_number
+        const isOutbound = msg.direction === 'outbound'
+        const otherPhone = isOutbound ? msg.to_number : msg.from_number
         if (!otherPhone) return
 
         const conversationId = otherPhone
@@ -125,7 +122,7 @@ export function groupMessagesByConversation(
                 tags: [],
                 leadStatus: "new",
                 notes: [],
-                unread: msg.status === "received",
+                unread: msg.direction === "inbound" && msg.status === "received",
                 archived: false,
             })
         }

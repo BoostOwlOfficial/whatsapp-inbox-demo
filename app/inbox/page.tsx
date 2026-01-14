@@ -139,15 +139,13 @@ export default function InboxPage() {
                 message_type: "text",
                 timestamp: Math.floor(Date.now() / 1000),
                 status: "sent",
+                direction: "outbound", // Mark as outbound (sent by us)
                 contact_name: selectedConversation.contactName,
                 metadata: null,
             }
 
             // Add to UI immediately
             addOptimisticMessage(optimisticMessage)
-
-            // Debug: Check if we have access token
-            console.log('📱 Sending message. Access token available:', !!accessToken)
 
             // Send message in background - API will fetch credentials from DB
             const result = await sendMessage({

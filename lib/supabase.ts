@@ -29,9 +29,10 @@ export interface WhatsAppMessage {
     message_type: string
     message_text: string | null
     timestamp: number
-    status: 'received' | 'sent' | 'delivered' | 'read' | 'failed'
-    metadata: Record<string, any> | null
-    created_at?: string
+    status: "sent" | "delivered" | "read" | "failed" | "received"
+    direction: "inbound" | "outbound"
+    metadata: Record<string, unknown> | null
+    created_at: string
 }
 
 export interface MessageInsert {

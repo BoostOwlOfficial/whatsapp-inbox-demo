@@ -38,23 +38,17 @@ export async function getWhatsAppCredentials(userId?: string | null): Promise<De
 
         // Add user filter if provided
         if (userId) {
-            console.log('🔍 Filtering by user_id:', userId)
             query = query.eq('user_id', userId)
-        } else {
-            console.log('⚠️ No userId provided, querying all accounts')
         }
 
         const { data: accounts, error } = await query
 
         if (error) {
-            console.error('❌ Database error fetching WhatsApp account:', error)
+            console.error('Database error fetching WhatsApp account:', error)
             throw new Error('Failed to fetch WhatsApp account')
         }
 
-        console.log('📊 Query result - accounts found:', accounts?.length || 0)
-
         if (!accounts || accounts.length === 0) {
-            console.log('⚠️ No active WhatsApp account found for userId:', userId)
             return null
         }
 
@@ -98,8 +92,6 @@ export async function getWhatsAppCredentials(userId?: string | null): Promise<De
         if (credentials.token_expires_at) {
             const expiresAt = new Date(credentials.token_expires_at)
             if (expiresAt < new Date()) {
-                console.warn('⚠️ WhatsApp access token has expired')
-                // TODO: Implement token refresh logic
                 throw new Error('WhatsApp access token has expired')
             }
         }
