@@ -47,23 +47,8 @@ export default function TemplatesPage() {
                 setLoading(true)
                 setError(null)
 
-                // Check if settings are configured
-                if (!accessToken || !wabaId) {
-                    throw new Error("Please configure your WhatsApp settings first")
-                }
-
-                // Build URL with settings from context (only non-sensitive params)
-                const params = new URLSearchParams({
-                    wabaId,
-                    apiVersion: apiVersion || "v21.0",
-                })
-
-                // Send access token in Authorization header (more secure)
-                const response = await fetch(`/api/templates?${params.toString()}`, {
-                    headers: {
-                        Authorization: `Bearer ${accessToken}`,
-                    },
-                })
+                // New API fetches credentials from DB automatically
+                const response = await fetch(`/api/templates`)
 
                 if (!response.ok) {
                     const errorData = await response.json()
@@ -89,7 +74,7 @@ export default function TemplatesPage() {
         }
 
         fetchTemplates()
-    }, [accessToken, wabaId, apiVersion])
+    }, [])
 
     const handleRefresh = () => {
         // Refetch templates after creating a new one
