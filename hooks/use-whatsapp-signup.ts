@@ -282,6 +282,7 @@ export function useWhatsAppSignup() {
     accountStatus,
     launchSignup,
     checkStatus,
+    refetch: checkStatus, // Alias for refreshing status
     sdkReady,
   };
 }

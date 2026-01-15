@@ -4,16 +4,70 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useWhatsAppSignup } from "@/hooks/use-whatsapp-signup"
-import { Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
 import { useState } from "react"
 import { WhatsAppSignupDialog } from "@/components/whatsapp-signup-dialog"
 import { ProtectedRoute } from "@/components/protected-route"
+import { useAuth } from "@/lib/auth-context"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/hooks/use-toast"
 
 export default function SettingsPage() {
-    const { accountStatus, isLoading } = useWhatsAppSignup()
+    const { accountStatus, isLoading, refetch } = useWhatsAppSignup()
+    const { accessToken } = useAuth()
+    const { toast } = useToast()
     const [showSignupDialog, setShowSignupDialog] = useState(false)
+    const [showDisconnectDialog, setShowDisconnectDialog] = useState(false)
+    const [disconnecting, setDisconnecting] = useState(false)
 
     const isConnected = accountStatus?.connected || false
+
+    const handleDisconnect = async () => {
+        try {
+            setDisconnecting(true)
+
+            const response = await fetch("/api/whatsapp/disconnect", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${accessToken}`,
+                    "Content-Type": "application/json",
+                },
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.details || data.error || "Failed to disconnect")
+            }
+
+            toast({
+                title: "WhatsApp Disconnected",
+                description: `Successfully disconnected ${data.disconnectedAccount?.businessName || 'account'}`,
+            })
+
+            // Refresh account status
+            refetch()
+            setShowDisconnectDialog(false)
+        } catch (error) {
+            console.error("Error disconnecting WhatsApp:", error)
+            toast({
+                title: "Disconnect Failed",
+                description: error instanceof Error ? error.message : "Failed to disconnect WhatsApp account",
+                variant: "destructive",
+            })
+        } finally {
+            setDisconnecting(false)
+        }
+    }
 
     return (
         <ProtectedRoute>
@@ -72,13 +126,22 @@ export default function SettingsPage() {
                                         </span>
                                     </div>
 
-                                    <div className="pt-4">
+                                    <div className="pt-4 space-y-2">
                                         <Button
                                             variant="outline"
                                             onClick={() => setShowSignupDialog(true)}
                                             className="w-full"
                                         >
                                             Reconnect Account
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={() => setShowDisconnectDialog(true)}
+                                            className="w-full"
+                                            disabled={disconnecting}
+                                        >
+                                            {disconnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                            Disconnect WhatsApp
                                         </Button>
                                     </div>
                                 </div>
@@ -113,6 +176,42 @@ export default function SettingsPage() {
                 </div>
 
                 <WhatsAppSignupDialog open={showSignupDialog} onOpenChange={setShowSignupDialog} />
+
+                {/* Disconnect Confirmation Dialog */}
+                <AlertDialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-destructive" />
+                                Disconnect WhatsApp Account?
+                            </AlertDialogTitle>
+                            <div className="text-sm text-muted-foreground space-y-2 pt-2">
+                                <p>This will remove your WhatsApp Business account connection from BoostOwl.</p>
+                                <p className="font-medium">You will lose access to:</p>
+                                <ul className="list-disc list-inside space-y-1 ml-2">
+                                    <li>Inbox and message history</li>
+                                    <li>Message templates</li>
+                                    <li>Automated responses</li>
+                                </ul>
+                                <p className="text-destructive font-medium mt-4">
+                                    This action cannot be undone. You can reconnect later, but your message history
+                                    will not be restored.
+                                </p>
+                            </div>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel disabled={disconnecting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleDisconnect}
+                                disabled={disconnecting}
+                                className="bg-destructive hover:bg-destructive/90"
+                            >
+                                {disconnecting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Yes, Disconnect
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </ProtectedRoute >
     )

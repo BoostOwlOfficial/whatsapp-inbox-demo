@@ -28,6 +28,7 @@ import {
 } from "@/lib/template-creation-helpers"
 import { Loader2, Plus, X, AlertCircle, CheckCircle2 } from "lucide-react"
 import type { ComponentFormat, ButtonType } from "@/lib/whatsapp-template-types"
+import { useAuth } from "@/lib/auth-context"
 
 interface CreateTemplateDialogProps {
     open: boolean
@@ -36,6 +37,7 @@ interface CreateTemplateDialogProps {
 }
 
 export function CreateTemplateDialog({ open, onOpenChange, onSuccess }: CreateTemplateDialogProps) {
+    const { accessToken } = useAuth()
 
     // Basic info
     const [name, setName] = useState("")
@@ -59,12 +61,10 @@ export function CreateTemplateDialog({ open, onOpenChange, onSuccess }: CreateTe
     const [validationErrors, setValidationErrors] = useState<string[]>([])
 
     const handleNameChange = (value: string) => {
-        setName(value)
-        // Auto-format as user types
-        const formatted = formatTemplateName(value)
-        if (formatted !== value) {
-            setTimeout(() => setName(formatted), 0)
-        }
+        // Only restrict to valid characters, don't auto-format
+        // Allow lowercase letters, numbers, and underscores
+        const filtered = value.toLowerCase().replace(/[^a-z0-9_]/g, '')
+        setName(filtered)
     }
 
     const addButton = () => {
@@ -173,13 +173,8 @@ export function CreateTemplateDialog({ open, onOpenChange, onSuccess }: CreateTe
                 return
             }
 
-            // Submit
-            const params = new URLSearchParams({
-                wabaId: wabaId || "",
-                apiVersion: apiVersion || "v21.0",
-            })
-
-            const response = await fetch(`/api/templates/create?${params.toString()}`, {
+            // Submit to API - credentials will be fetched from database
+            const response = await fetch(`/api/templates/create`, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${accessToken}`,

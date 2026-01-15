@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import type { TemplateCreationRequest, TemplateCreationResponse } from "@/lib/template-creation-helpers"
 import { validateTemplateCreation } from "@/lib/template-creation-helpers"
 import { getWhatsAppCredentials, getWhatsAppApiVersion } from "@/lib/whatsapp-credentials"
+import { verifyAccessToken } from "@/lib/auth/jwt"
 
 /**
  * POST /api/templates/create
@@ -10,9 +11,20 @@ import { getWhatsAppCredentials, getWhatsAppApiVersion } from "@/lib/whatsapp-cr
  */
 export async function POST(request: NextRequest) {
     try {
-        // Get optional user ID from query
-        const { searchParams } = new URL(request.url)
-        const userId = searchParams.get("userId")
+        // Get authorization header
+        const authHeader = request.headers.get("authorization")
+        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+        }
+
+        // Verify JWT token
+        const token = authHeader.substring(7)
+        const decoded = verifyAccessToken(token)
+        if (!decoded) {
+            return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+        }
+
+        const userId = decoded.userId
 
         // Get WhatsApp credentials from database
         let credentials
