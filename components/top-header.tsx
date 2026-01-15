@@ -7,11 +7,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Search, Bell, HelpCircle } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { WhatsAppSignupDialog } from "@/components/whatsapp-signup-dialog"
-import { useWhatsAppSignup } from "@/hooks/use-whatsapp-signup"
+import { useWhatsAppStatus } from "@/lib/whatsapp-status-context"
 
 export function TopHeader() {
     const { user } = useAuth()
-    const { accountStatus, isLoading } = useWhatsAppSignup()
+    const { accountStatus, isLoading } = useWhatsAppStatus()
     const [showSignupDialog, setShowSignupDialog] = useState(false)
 
     const isConnected = accountStatus?.connected || false

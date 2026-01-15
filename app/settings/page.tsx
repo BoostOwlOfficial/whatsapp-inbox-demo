@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useWhatsAppSignup } from "@/hooks/use-whatsapp-signup"
+import { useWhatsAppStatus } from "@/lib/whatsapp-status-context"
 import { Loader2, CheckCircle2, XCircle, AlertTriangle } from "lucide-react"
 import { useState } from "react"
 import { WhatsAppSignupDialog } from "@/components/whatsapp-signup-dialog"
@@ -22,7 +22,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 
 export default function SettingsPage() {
-    const { accountStatus, isLoading, refetch } = useWhatsAppSignup()
+    const { accountStatus, isLoading, refetch } = useWhatsAppStatus()
     const { accessToken } = useAuth()
     const { toast } = useToast()
     const [showSignupDialog, setShowSignupDialog] = useState(false)

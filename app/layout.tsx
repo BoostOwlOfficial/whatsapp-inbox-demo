@@ -3,7 +3,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { AuthProvider } from "@/lib/auth-context";
+import { WhatsAppStatusProvider } from "@/lib/whatsapp-status-context";
 import { MessagesProvider } from "@/lib/messages-context";
+import { Toaster } from "@/components/ui/toaster";
 import "./globals.css";
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -66,10 +68,13 @@ export default function RootLayout({
         />
 
         <AuthProvider>
-          <MessagesProvider>
-            {children}
-            <Analytics />
-          </MessagesProvider>
+          <WhatsAppStatusProvider>
+            <MessagesProvider>
+              {children}
+              <Analytics />
+              <Toaster />
+            </MessagesProvider>
+          </WhatsAppStatusProvider>
         </AuthProvider>
       </body>
     </html>

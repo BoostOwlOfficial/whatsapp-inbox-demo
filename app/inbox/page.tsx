@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useMessagesContext } from "@/lib/messages-context"
 import { useAuth } from "@/lib/auth-context"
+import { useWhatsAppStatus } from "@/lib/whatsapp-status-context"
 import { sendMessage } from "@/lib/whatsapp-api"
 import type { Conversation } from "@/lib/whatsapp-api"
 import {
@@ -42,6 +43,7 @@ export default function InboxPage() {
     // Use global messages context instead of hook
     const { conversations, loading, error, refetch, addOptimisticMessage, updateMessageId, phoneNumberId } = useMessagesContext()
     const { accessToken } = useAuth()
+    const { checkingStatus, accountStatus } = useWhatsAppStatus()
 
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
     const [messageInput, setMessageInput] = useState("")
@@ -193,7 +195,24 @@ export default function InboxPage() {
         return true
     })
 
-    // Show configuration prompt if settings not configured
+    // Show loading state while checking WhatsApp connection status
+    if (checkingStatus) {
+        return (
+            <ProtectedRoute>
+                <div className="flex h-full items-center justify-center bg-slate-50">
+                    <div className="text-center max-w-md p-8">
+                        <Loader2 className="h-16 w-16 text-green-600 mx-auto mb-4 animate-spin" />
+                        <h2 className="text-2xl font-bold text-slate-900 mb-2">Checking WhatsApp Connection</h2>
+                        <p className="text-slate-600">
+                            Please wait while we verify your WhatsApp Business account...
+                        </p>
+                    </div>
+                </div>
+            </ProtectedRoute>
+        )
+    }
+
+    // Show configuration prompt if settings not configured (after loading completes)
     if (!phoneNumberId) {
         return (
             <ProtectedRoute>

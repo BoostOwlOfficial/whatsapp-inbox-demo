@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { CheckCircle2, AlertCircle, Loader2, AlertTriangle } from "lucide-react";
-import { useWhatsAppSignup } from "@/hooks/use-whatsapp-signup";
+import { useWhatsAppStatus } from "@/lib/whatsapp-status-context";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -35,7 +35,7 @@ export function WhatsAppSignupDialog({
   onOpenChange,
 }: WhatsAppSignupDialogProps) {
   const { isLoading, error, accountStatus, launchSignup, sdkReady, refetch } =
-    useWhatsAppSignup();
+    useWhatsAppStatus();
   const { accessToken } = useAuth();
   const { toast } = useToast();
   const [localError, setLocalError] = useState<string | null>(null);
@@ -74,11 +74,13 @@ export function WhatsAppSignupDialog({
 
       toast({
         title: "WhatsApp Disconnected",
-        description: `Successfully disconnected ${data.disconnectedAccount?.businessName || 'account'}`,
+        description: data.deletedMessagesCount
+          ? `Successfully disconnected ${data.disconnectedAccount?.businessName || 'account'} and deleted ${data.deletedMessagesCount} messages`
+          : `Successfully disconnected ${data.disconnectedAccount?.businessName || 'account'}`,
       });
 
       // Refresh account status and close dialogs
-      refetch();
+      await refetch();
       setShowDisconnectDialog(false);
       onOpenChange(false);
     } catch (error) {

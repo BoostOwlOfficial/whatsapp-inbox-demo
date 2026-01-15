@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
-import { verifyAccessToken } from "@/lib/auth/jwt"
+import { requireAuth, getUser } from "@/lib/auth/middleware"
 
 /**
  * POST /api/whatsapp/disconnect
  * Disconnect WhatsApp Business account
+ * - Deletes all messages associated with the account
  * - Deletes account record from database
  * - Note: WhatsApp doesn't provide a programmatic disconnect API
  *   Users must manually unsubscribe via Facebook Business Manager if needed
  */
-export async function POST(request: NextRequest) {
+async function handleDisconnect(request: NextRequest) {
     try {
-        // Get authorization header
-        const authHeader = request.headers.get("authorization")
-        if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        // Get authenticated user
+        const authUser = getUser(request as any);
+
+        if (!authUser) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
-        // Verify JWT token
-        const token = authHeader.substring(7)
-        const decoded = verifyAccessToken(token)
-        if (!decoded) {
-            return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-        }
-
-        const userId = decoded.userId
+        const userId = authUser.userId
+        console.log(`[Disconnect] Request from user: ${userId}`)
 
         // Check if Supabase is configured
         if (!isSupabaseConfigured()) {
@@ -34,25 +30,29 @@ export async function POST(request: NextRequest) {
             )
         }
 
-        // Delete WhatsApp account from database
-        const { data, error } = await supabase
+        // STEP 1: Get WhatsApp account details (to get phone_number_id)
+        // Use same query as status endpoint for consistency
+        const { data: accounts, error: fetchError } = await supabase
             .from("whatsapp_accounts")
-            .delete()
+            .select("phone_number_id, display_name, phone_number")
             .eq("user_id", userId)
-            .select()
+            .eq("is_active", true)
+            .order("connected_at", { ascending: false })
+            .limit(1)
 
-        if (error) {
-            console.error("Error deleting WhatsApp account:", error)
+        if (fetchError) {
+            console.error("[Disconnect] Error fetching WhatsApp account:", fetchError)
             return NextResponse.json(
                 {
-                    error: "Failed to disconnect WhatsApp account",
-                    details: error.message,
+                    error: "Failed to fetch WhatsApp account",
+                    details: fetchError.message,
                 },
                 { status: 500 }
             )
         }
 
-        if (!data || data.length === 0) {
+        if (!accounts || accounts.length === 0) {
+            console.log("[Disconnect] No active WhatsApp account found for user:", userId)
             return NextResponse.json(
                 {
                     error: "No WhatsApp account found",
@@ -62,18 +62,63 @@ export async function POST(request: NextRequest) {
             )
         }
 
+        const account = accounts[0]
+
+        console.log(`🗑️  Disconnecting WhatsApp account for user: ${userId}`)
+        console.log(`📱 Phone Number ID: ${account.phone_number_id}`)
+
+        // STEP 2: Delete all messages associated with this phone_number_id
+        const { data: deletedMessages, error: messagesError } = await supabase
+            .from("whatsapp_messages")
+            .delete()
+            .eq("phone_number_id", account.phone_number_id)
+            .select("id")
+
+        if (messagesError) {
+            console.error("[Disconnect] Error deleting messages:", messagesError)
+            return NextResponse.json(
+                {
+                    error: "Failed to delete messages",
+                    details: messagesError.message,
+                },
+                { status: 500 }
+            )
+        }
+
+        const messageCount = deletedMessages?.length || 0
+        console.log(`✅ Deleted ${messageCount} messages`)
+
+        // STEP 3: Delete the WhatsApp account (or mark as inactive)
+        const { error: accountError } = await supabase
+            .from("whatsapp_accounts")
+            .delete()
+            .eq("user_id", userId)
+            .eq("is_active", true)
+
+        if (accountError) {
+            console.error("[Disconnect] Error deleting WhatsApp account:", accountError)
+            return NextResponse.json(
+                {
+                    error: "Failed to disconnect WhatsApp account",
+                    details: accountError.message,
+                },
+                { status: 500 }
+            )
+        }
+
         console.log(`✅ WhatsApp account disconnected for user: ${userId}`)
 
         return NextResponse.json({
             success: true,
             message: "WhatsApp account disconnected successfully",
             disconnectedAccount: {
-                businessName: data[0].business_name,
-                phoneNumber: data[0].phone_number,
+                businessName: account.display_name,
+                phoneNumber: account.phone_number,
             },
+            deletedMessagesCount: messageCount,
         })
     } catch (error) {
-        console.error("Error in disconnect endpoint:", error)
+        console.error("[Disconnect] Error in disconnect endpoint:", error)
         return NextResponse.json(
             {
                 error: "Internal server error",
@@ -82,4 +127,12 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
+}
+
+/**
+ * POST /api/whatsapp/disconnect
+ * Disconnect WhatsApp Business account
+ */
+export async function POST(request: NextRequest) {
+    return requireAuth(request, handleDisconnect);
 }
