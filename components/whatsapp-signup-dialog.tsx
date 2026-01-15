@@ -41,16 +41,22 @@ export function WhatsAppSignupDialog({
   const [localError, setLocalError] = useState<string | null>(null);
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [fetchingStatus, setFetchingStatus] = useState(false); // Track status fetching after connection
 
   const handleSignup = async () => {
     try {
       setLocalError(null);
+      setFetchingStatus(true); // Start loading
       await launchSignup();
+      // Wait a bit for status to update
+      await new Promise(resolve => setTimeout(resolve, 500));
       // On success, the dialog will show the connected status
     } catch (err) {
       setLocalError(
         err instanceof Error ? err.message : "Failed to connect WhatsApp"
       );
+    } finally {
+      setFetchingStatus(false); // Stop loading
     }
   };
 
@@ -126,7 +132,20 @@ export function WhatsAppSignupDialog({
             </Alert>
           )}
 
-          {accountStatus?.connected && accountStatus.account ? (
+          {/* Show loading state after connection completes */}
+          {fetchingStatus && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">Connecting your account...</p>
+                  <p className="text-xs text-blue-700 mt-0.5">Please wait while we set up your WhatsApp Business connection</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {fetchingStatus ? null : accountStatus?.connected && accountStatus.account ? (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
