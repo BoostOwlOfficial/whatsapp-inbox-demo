@@ -66,23 +66,23 @@ export function ChatWindow({ conversation, onSendMessage }: ChatWindowProps) {
             .map((msg: any) => (
               <div
                 key={msg.id}
-                className={cn("flex gap-3", msg.from === conversation.senderPhone ? "justify-end" : "justify-start")}
+                className={cn("flex gap-3", msg.direction === "outbound" ? "justify-end" : "justify-start")}
               >
                 <div
                   className={cn(
                     "max-w-xs px-4 py-2 rounded-lg",
-                    msg.from === conversation.senderPhone ? "bg-green-600 text-white" : "bg-muted text-foreground",
+                    msg.direction === "outbound" ? "bg-green-600 text-white" : "bg-muted text-foreground",
                   )}
                 >
                   <p className="text-sm">{msg.text}</p>
                   <div
                     className={cn(
                       "flex items-center gap-1 mt-1 text-xs",
-                      msg.from === conversation.senderPhone ? "text-green-100" : "text-muted-foreground",
+                      msg.direction === "outbound" ? "text-green-100" : "text-muted-foreground",
                     )}
                   >
                     <span>{formatToIST(msg.timestamp, 'short')}</span>
-                    {msg.from === conversation.senderPhone && getStatusIcon(msg.status)}
+                    {msg.direction === "outbound" && getStatusIcon(msg.status)}
                   </div>
                 </div>
               </div>

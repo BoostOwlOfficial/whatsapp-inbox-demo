@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
   message_text TEXT,
   timestamp BIGINT NOT NULL,
   status TEXT DEFAULT 'received',
+  direction TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
   metadata JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -19,6 +20,7 @@ CREATE INDEX IF NOT EXISTS idx_from_number ON whatsapp_messages(from_number);
 CREATE INDEX IF NOT EXISTS idx_to_number ON whatsapp_messages(to_number);
 CREATE INDEX IF NOT EXISTS idx_timestamp ON whatsapp_messages(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_created_at ON whatsapp_messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_direction ON whatsapp_messages(direction);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE whatsapp_messages ENABLE ROW LEVEL SECURITY;

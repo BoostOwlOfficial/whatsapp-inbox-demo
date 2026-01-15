@@ -107,7 +107,7 @@ export default function InboxPage() {
             tags: [],
             createdAt: new Date().toISOString(),
             leadStatus: "new",
-            notes: "",
+            notes: [],
             archived: false,
         }
 
@@ -382,23 +382,23 @@ export default function InboxPage() {
                                 </div>
 
                                 {selectedConversation.messages.map((msg) => {
-                                    const isSelf = msg.from === myPhoneNumber
+                                    const isOutbound = msg.direction === "outbound"
                                     return (
                                         <div
                                             key={msg.id}
-                                            className={`flex ${isSelf ? "justify-end" : "justify-start"}`}
+                                            className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
                                         >
                                             <div
-                                                className={`max-w-[60%] rounded-lg p-3 shadow-sm relative text-sm ${isSelf
+                                                className={`max-w-[60%] rounded-lg p-3 shadow-sm relative text-sm ${isOutbound
                                                     ? "bg-green-100 text-slate-900 rounded-tr-none"
                                                     : "bg-white text-slate-900 rounded-tl-none"
                                                     }`}
                                             >
                                                 <p className="leading-relaxed">{msg.text}</p>
-                                                <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isSelf ? "text-green-700/70" : "text-slate-400"
+                                                <div className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${isOutbound ? "text-green-700/70" : "text-slate-400"
                                                     }`}>
                                                     <span>{formatTime(msg.timestamp)}</span>
-                                                    {isSelf && (
+                                                    {isOutbound && (
                                                         <span>
                                                             {msg.status === "read" ? <CheckCheck className="h-3 w-3 text-blue-500" /> : <Check className="h-3 w-3" />}
                                                         </span>

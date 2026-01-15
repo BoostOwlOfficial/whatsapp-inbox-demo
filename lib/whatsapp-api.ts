@@ -22,6 +22,7 @@ export interface Message {
     timestamp: number
     status: "sent" | "delivered" | "read" | "failed" | "received"
     type: "text" | "image" | "document"
+    direction: "inbound" | "outbound"
 }
 
 export interface Contact {
@@ -138,6 +139,7 @@ export function groupMessagesByConversation(
             timestamp: msg.timestamp,
             status: msg.status,
             type: msg.message_type as "text" | "image" | "document",
+            direction: msg.direction,
         })
 
         // Update contact name if available
