@@ -11,6 +11,10 @@ const JWT_REFRESH_EXPIRY = process.env.JWT_REFRESH_EXPIRY || "7d";
 export interface AccessTokenPayload {
   userId: string;
   email: string;
+  // These fields required for Supabase compatibility
+  sub?: string; // Subject (user ID) - Supabase uses this for auth.uid()
+  iat?: number; // Issued at
+  exp?: number; // Expiration
 }
 
 export interface RefreshTokenPayload {
@@ -22,9 +26,16 @@ export interface RefreshTokenPayload {
  * Generate an access token (short-lived)
  */
 export function generateAccessToken(payload: AccessTokenPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
-    expiresIn: JWT_ACCESS_EXPIRY,
-  });
+  return jwt.sign(
+    {
+      ...payload,
+      sub: payload.userId, // CRITICAL: Supabase reads auth.uid() from 'sub' claim
+    },
+    JWT_SECRET,
+    {
+      expiresIn: JWT_ACCESS_EXPIRY,
+    }
+  );
 }
 
 /**

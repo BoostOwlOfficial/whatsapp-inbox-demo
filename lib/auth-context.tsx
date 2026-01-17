@@ -9,6 +9,7 @@ import {
   useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
+import { setSupabaseAuth, clearSupabaseAuth } from "./supabase";
 
 interface User {
   id: string;
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         setUser(data.user);
         setAccessToken(data.accessToken);
+        setSupabaseAuth(data.accessToken); // Sync JWT with Supabase on refresh
       } else {
         // Refresh token invalid or expired
         setUser(null);
@@ -91,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(data.user);
     setAccessToken(data.accessToken);
+    setSupabaseAuth(data.accessToken); // Sync JWT with Supabase
     router.push("/");
   };
 
@@ -110,6 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(data.user);
     setAccessToken(data.accessToken);
+    setSupabaseAuth(data.accessToken); // Sync JWT with Supabase
     router.push("/");
   };
 
@@ -128,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(null);
     setAccessToken(null);
+    clearSupabaseAuth(); // Clear Supabase session
     router.push("/login");
   };
 

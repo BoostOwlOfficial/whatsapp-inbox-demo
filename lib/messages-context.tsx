@@ -11,14 +11,15 @@ import {
 } from "react";
 import {
   fetchMessages,
-  pollNewMessages,
   groupMessagesByConversation,
   extractContacts,
   Conversation,
   Contact,
 } from "./whatsapp-api";
+import { useSupabaseRealtime } from "@/hooks/use-supabase-realtime";
 import { WhatsAppMessage } from "./supabase";
 import { useWhatsAppStatus } from "./whatsapp-status-context";
+import { useAuth } from "./auth-context";
 
 export interface Message {
   id: string;
@@ -40,7 +41,8 @@ interface MessagesContextType {
   initialized: boolean;
   addOptimisticMessage: (message: WhatsAppMessage) => void;
   updateMessageId: (tempId: string, realId: string) => void;
-  clearMessages: () => void; // Add function to clear all messages
+  clearMessages: () => void;
+  realtimeConnected: boolean; // Realtime connection status
 }
 
 const MessagesContext = createContext<MessagesContextType | undefined>(
@@ -49,6 +51,9 @@ const MessagesContext = createContext<MessagesContextType | undefined>(
 
 export function MessagesProvider({ children }: { children: ReactNode }) {
   const { accountStatus } = useWhatsAppStatus();
+  // Get accessToken from auth context
+  const { accessToken } = useAuth();
+
   const [phoneNumberId, setPhoneNumberId] = useState<string | null>(null);
   const [messages, setMessages] = useState<WhatsAppMessage[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -56,71 +61,64 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
-
-  // Use ref to avoid polling restart on every message change
-  const messagesRef = useRef<WhatsAppMessage[]>([]);
-  const lastPolledTimestamp = useRef<number>(0);
-
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
 
   // Get phone number from WhatsApp account status
   useEffect(() => {
     if (accountStatus?.connected && accountStatus.account?.phone_number_id) {
-      console.log("[Messages] Connected phone:", accountStatus.account.phone_number_id);
+      console.log(
+        "[Messages] Connected phone:",
+        accountStatus.account.phone_number_id
+      );
       setPhoneNumberId(accountStatus.account.phone_number_id);
     } else {
-      console.log("[Messages] No WhatsApp account connected - clearing messages");
+      console.log(
+        "[Messages] No WhatsApp account connected - clearing messages"
+      );
       setPhoneNumberId(null);
       setInitialized(false);
       // Clear messages when disconnected
       setMessages([]);
       setConversations([]);
       setContacts([]);
-      lastPolledTimestamp.current = 0;
     }
   }, [accountStatus]);
 
   // Function to fetch and group messages
-  const fetchAndGroupMessages = useCallback(async (phoneId: string) => {
-    if (!phoneId) return;
+  const fetchAndGroupMessages = useCallback(
+    async (phoneId: string) => {
+      if (!phoneId || !accessToken) return;
 
-    try {
-      setLoading(true);
-      setError(null);
-      console.log("Fetching messages for phoneNumberId:", phoneId);
-      const fetchedMessages = await fetchMessages(phoneId);
-      console.log("Fetched messages:", fetchedMessages.length);
-      setMessages(fetchedMessages);
+      try {
+        setLoading(true);
+        setError(null);
+        console.log("Fetching messages for phoneNumberId:", phoneId);
+        const fetchedMessages = await fetchMessages(phoneId, accessToken);
+        console.log("Fetched messages:", fetchedMessages.length);
+        setMessages(fetchedMessages);
 
-      // Update last polled timestamp
-      if (fetchedMessages.length > 0) {
-        const maxTimestamp = Math.max(
-          ...fetchedMessages.map((m) => m.timestamp)
+        // Group messages into conversations
+        const grouped = groupMessagesByConversation(fetchedMessages, phoneId);
+        console.log("Grouped conversations:", grouped.length);
+        setConversations(grouped);
+
+        // Extract contacts
+        const extractedContacts = extractContacts(fetchedMessages, phoneId);
+        console.log("Extracted contacts:", extractedContacts.length);
+        setContacts(extractedContacts);
+
+        setInitialized(true);
+      } catch (err) {
+        console.error("Error fetching messages:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to fetch messages"
         );
-        lastPolledTimestamp.current = maxTimestamp;
-        console.log("📅 Initial lastPolledTimestamp set to:", maxTimestamp);
+      } finally {
+        setLoading(false);
       }
-
-      // Group messages into conversations
-      const grouped = groupMessagesByConversation(fetchedMessages, phoneId);
-      console.log("Grouped conversations:", grouped.length);
-      setConversations(grouped);
-
-      // Extract contacts
-      const extractedContacts = extractContacts(fetchedMessages, phoneId);
-      console.log("Extracted contacts:", extractedContacts.length);
-      setContacts(extractedContacts);
-
-      setInitialized(true);
-    } catch (err) {
-      console.error("Error fetching messages:", err);
-      setError(err instanceof Error ? err.message : "Failed to fetch messages");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [accessToken]
+  );
 
   // Initialize when phoneNumberId is available
   useEffect(() => {
@@ -133,108 +131,75 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     }
   }, [phoneNumberId, initialized, fetchAndGroupMessages]);
 
-  // Polling for new messages - FIXED: removed messages from dependencies
-  useEffect(() => {
-    if (!phoneNumberId || !initialized) {
-      console.log(
-        "Polling disabled - phoneNumberId:",
-        phoneNumberId,
-        "initialized:",
-        initialized
-      );
-      return;
-    }
-
-    console.log("Starting polling for phoneNumberId:", phoneNumberId);
-    const pollingInterval = setInterval(async () => {
-      try {
-        const currentMessages = messagesRef.current;
-        // Use the tracked timestamp instead of last message timestamp
-        const timestampToUse =
-          lastPolledTimestamp.current ||
-          currentMessages[currentMessages.length - 1]?.timestamp ||
-          0;
-        console.log(
-          "📡 Polling: lastPolledTimestamp =",
-          timestampToUse,
-          "total messages =",
-          currentMessages.length
-        );
-        const newMessages = await pollNewMessages(
-          phoneNumberId,
-          timestampToUse
-        );
-
-        if (newMessages.length > 0) {
-          console.log(
-            "✅ Found",
-            newMessages.length,
-            "new messages:",
-            newMessages.map((m) => ({
-              id: m.id.substring(0, 20),
-              timestamp: m.timestamp,
-              text: m.message_text?.substring(0, 30),
-            }))
-          );
-
-          // Update last polled timestamp to the latest from this batch
-          const maxTimestamp = Math.max(...newMessages.map((m) => m.timestamp));
-          lastPolledTimestamp.current = maxTimestamp;
-          console.log("📅 Updated lastPolledTimestamp to:", maxTimestamp);
-
-          // Deduplicate messages by ID to prevent duplicates
-          const existingIds = new Set(currentMessages.map((m) => m.id));
-          const uniqueNewMessages = newMessages.filter(
-            (m) => !existingIds.has(m.id)
-          );
-
-          if (uniqueNewMessages.length > 0) {
+  // Realtime subscription for new messages
+  const { connected: realtimeStatus } = useSupabaseRealtime({
+    phoneNumberId,
+    enabled: initialized && !!phoneNumberId,
+    onMessageInsert: useCallback(
+      (newMessage: WhatsAppMessage) => {
+        setMessages((currentMessages) => {
+          // Deduplicate by ID
+          if (currentMessages.some((m) => m.id === newMessage.id)) {
             console.log(
-              `📝 Adding ${uniqueNewMessages.length
-              } unique messages (filtered ${newMessages.length - uniqueNewMessages.length
-              } duplicates)`
+              "⏭️ Duplicate message ignored:",
+              newMessage.id.substring(0, 20)
             );
-
-            // Append only unique new messages
-            const updatedMessages = [...currentMessages, ...uniqueNewMessages];
-            console.log(
-              "📝 Updating state with",
-              updatedMessages.length,
-              "total messages"
-            );
-            setMessages(updatedMessages);
-
-            // Re-group conversations and contacts
-            const grouped = groupMessagesByConversation(
-              updatedMessages,
-              phoneNumberId
-            );
-            console.log("📊 Grouped into", grouped.length, "conversations");
-            setConversations(grouped);
-
-            const extractedContacts = extractContacts(
-              updatedMessages,
-              phoneNumberId
-            );
-            setContacts(extractedContacts);
-          } else {
-            console.log(
-              "⏭️ All new messages were duplicates, but timestamp updated to prevent re-polling"
-            );
+            return currentMessages;
           }
-        } else {
-          console.log("⏭️ No new messages");
-        }
-      } catch (err) {
-        console.error("❌ Polling error:", err);
-      }
-    }, 5000); // Poll every 5 seconds
 
-    return () => {
-      console.log("Stopping polling");
-      clearInterval(pollingInterval);
-    };
-  }, [phoneNumberId, initialized]); // REMOVED messages from dependencies
+          console.log(
+            "✅ New message added via Realtime:",
+            newMessage.id.substring(0, 20)
+          );
+          const updated = [...currentMessages, newMessage];
+
+          // Re-group conversations
+          if (phoneNumberId) {
+            const grouped = groupMessagesByConversation(updated, phoneNumberId);
+            setConversations(grouped);
+            const extractedContacts = extractContacts(updated, phoneNumberId);
+            setContacts(extractedContacts);
+          }
+
+          return updated;
+        });
+      },
+      [phoneNumberId]
+    ),
+
+    onMessageUpdate: useCallback(
+      (updatedMessage) => {
+        setMessages((currentMessages) => {
+          const index = currentMessages.findIndex(
+            (m) => m.id === updatedMessage.id
+          );
+          if (index === -1) return currentMessages;
+
+          const updated = [...currentMessages];
+          updated[index] = { ...updated[index], ...updatedMessage };
+
+          console.log(
+            "🔄 Message updated via Realtime:",
+            updatedMessage.id.substring(0, 20)
+          );
+
+          // Re-group conversations
+          if (phoneNumberId) {
+            const grouped = groupMessagesByConversation(updated, phoneNumberId);
+            setConversations(grouped);
+          }
+
+          return updated;
+        });
+      },
+      [phoneNumberId]
+    ),
+  });
+
+  // Update realtime connection status
+  useEffect(() => {
+    setRealtimeConnected(realtimeStatus);
+  }, [realtimeStatus]);
 
   // Manual refetch function
   const refetch = useCallback(async () => {
@@ -336,7 +301,6 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
     setConversations([]);
     setContacts([]);
     setInitialized(false);
-    lastPolledTimestamp.current = 0;
   }, []);
 
   return (
@@ -353,6 +317,7 @@ export function MessagesProvider({ children }: { children: ReactNode }) {
         addOptimisticMessage,
         updateMessageId,
         clearMessages,
+        realtimeConnected,
       }}
     >
       {children}

@@ -1,65 +1,71 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
-import { getWhatsAppCredentials, getWhatsAppApiVersion } from "@/lib/whatsapp-credentials"
-import { verifyAccessToken } from "@/lib/auth/jwt"
+import { type NextRequest, NextResponse } from "next/server";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  getWhatsAppCredentials,
+  getWhatsAppApiVersion,
+} from "@/lib/whatsapp-credentials";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
 export async function POST(request: NextRequest) {
   // Get authorization header
-  const authHeader = request.headers.get("authorization")
+  const authHeader = request.headers.get("authorization");
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   // Verify JWT token
-  const token = authHeader.substring(7)
-  const decoded = verifyAccessToken(token)
+  const token = authHeader.substring(7);
+  const decoded = verifyAccessToken(token);
   if (!decoded) {
-    return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
-  const userId = decoded.userId
+  const userId = decoded.userId;
 
   try {
-    const { recipientPhone, message } = await request.json()
+    const { recipientPhone, message } = await request.json();
 
     // Validate required fields
     if (!recipientPhone || !message) {
       return NextResponse.json(
-        { error: "Missing required fields: recipientPhone and message are required" },
+        {
+          error:
+            "Missing required fields: recipientPhone and message are required",
+        },
         { status: 400 }
-      )
+      );
     }
 
     // Get WhatsApp credentials from database using authenticated user ID
-    let credentials
+    let credentials;
     try {
-      console.log('📞 Fetching WhatsApp credentials for userId:', userId)
-      credentials = await getWhatsAppCredentials(userId)
+      console.log("📞 Fetching WhatsApp credentials for userId:", userId);
+      credentials = await getWhatsAppCredentials(userId);
 
       if (!credentials) {
-        console.warn('⚠️ No credentials returned (null)')
+        console.warn("⚠️ No credentials returned (null)");
         return NextResponse.json(
           {
             error: "WhatsApp account not connected",
             details: "Please connect your WhatsApp Business account first",
           },
           { status: 401 }
-        )
+        );
       }
 
-      console.log('✅ Credentials found:', {
+      console.log("✅ Credentials found:", {
         phoneNumberId: credentials.phoneNumberId,
-        wabaId: credentials.wabaId
-      })
+        wabaId: credentials.wabaId,
+      });
     } catch (error) {
-      console.error("❌ Error fetching credentials:", error)
+      console.error("❌ Error fetching credentials:", error);
       return NextResponse.json(
         {
           error: "WhatsApp account not connected",
           details: "Please connect your WhatsApp Business account first",
         },
         { status: 401 }
-      )
+      );
     }
 
     if (!credentials) {
@@ -69,10 +75,10 @@ export async function POST(request: NextRequest) {
           details: "Please connect your WhatsApp Business account in settings",
         },
         { status: 404 }
-      )
+      );
     }
 
-    const apiVersion = getWhatsAppApiVersion()
+    const apiVersion = getWhatsAppApiVersion();
 
     // Send message via WhatsApp API
     const response = await fetch(
@@ -94,19 +100,19 @@ export async function POST(request: NextRequest) {
           },
         }),
       }
-    )
+    );
 
     if (!response.ok) {
-      const error = await response.json()
-      console.error("WhatsApp API error:", error)
+      const error = await response.json();
+      console.error("WhatsApp API error:", error);
       return NextResponse.json(
         { error: "Failed to send message", details: error },
         { status: response.status }
-      )
+      );
     }
 
-    const data = await response.json()
-    const messageId = data.messages?.[0]?.id
+    const data = await response.json();
+    const messageId = data.messages?.[0]?.id;
 
     // Save sent message to Supabase
     if (isSupabaseConfigured() && messageId) {
@@ -114,6 +120,7 @@ export async function POST(request: NextRequest) {
         const messageData = {
           id: messageId,
           phone_number_id: credentials.phoneNumberId,
+          user_id: userId, // CRITICAL: Links outbound message to user for RLS
           from_number: credentials.phoneNumber || "",
           to_number: recipientPhone,
           contact_name: null,
@@ -126,17 +133,19 @@ export async function POST(request: NextRequest) {
             sent_via: "api",
             whatsapp_response: data,
           },
-        }
+        };
 
-        const { error: dbError } = await supabase.from("whatsapp_messages").insert(messageData)
+        const { error: dbError } = await supabase
+          .from("whatsapp_messages")
+          .insert(messageData);
 
         if (dbError) {
-          console.error("Error saving sent message to Supabase:", dbError)
+          console.error("Error saving sent message to Supabase:", dbError);
         } else {
-          console.log("Sent message saved to Supabase:", messageId)
+          console.log("Sent message saved to Supabase:", messageId);
         }
       } catch (dbError) {
-        console.error("Failed to save sent message to Supabase:", dbError)
+        console.error("Failed to save sent message to Supabase:", dbError);
       }
     }
 
@@ -144,15 +153,15 @@ export async function POST(request: NextRequest) {
       success: true,
       message_id: messageId,
       from: credentials.phoneNumber,
-    })
+    });
   } catch (error) {
-    console.error("Error sending message:", error)
+    console.error("Error sending message:", error);
     return NextResponse.json(
       {
         error: "Internal server error",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 }
-    )
+    );
   }
 }

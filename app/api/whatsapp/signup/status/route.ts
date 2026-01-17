@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuth, getUser } from "@/lib/auth/middleware";
 
 async function handleGetStatus(request: NextRequest) {
@@ -17,8 +17,8 @@ async function handleGetStatus(request: NextRequest) {
 
     console.log("[Status] Checking for user:", authUser.userId);
 
-    // Query for active WhatsApp accounts
-    const { data: accounts, error } = await supabase
+    // Query for active WhatsApp accounts (use admin client to bypass RLS)
+    const { data: accounts, error } = await supabaseAdmin
       .from("whatsapp_accounts")
       .select("*")
       .eq("user_id", authUser.userId)

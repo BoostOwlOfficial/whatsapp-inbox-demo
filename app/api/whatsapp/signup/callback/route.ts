@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { encryptToken } from "@/lib/crypto-utils";
 import { verifyAccessToken } from "@/lib/auth/jwt";
 import type {
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
       is_active: true,
     };
 
-    const { data: account, error: accountError } = await supabase
+    const { data: account, error: accountError } = await supabaseAdmin
       .from("whatsapp_accounts")
       .insert(accountData)
       .select()
@@ -270,14 +270,17 @@ export async function POST(request: NextRequest) {
       encryption_auth_tag: authTag,
     };
 
-    const { error: credentialError } = await supabase
+    const { error: credentialError } = await supabaseAdmin
       .from("whatsapp_credentials")
       .insert(credentialData);
 
     if (credentialError) {
       console.error("Error inserting credentials:", credentialError);
       // Rollback account insertion
-      await supabase.from("whatsapp_accounts").delete().eq("id", account.id);
+      await supabaseAdmin
+        .from("whatsapp_accounts")
+        .delete()
+        .eq("id", account.id);
       throw new Error("Failed to save credentials");
     }
 
