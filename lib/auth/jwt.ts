@@ -77,6 +77,7 @@ export function getRefreshTokenExpiry(): number {
 
   const value = parseInt(match[1]);
   const unit = match[2];
+  console.log("deply again");
 
   switch (unit) {
     case "s":
