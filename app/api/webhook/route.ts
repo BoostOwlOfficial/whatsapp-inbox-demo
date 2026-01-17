@@ -111,11 +111,24 @@ export async function POST(request: NextRequest) {
 
                 // SECURITY: Lookup user_id using admin client (aliased as supabase)
                 // This links the message to the correct user for RLS filtering
-                const { data: account, error: accountError } = await supabase
-                  .from("whatsapp_accounts")
-                  .select("user_id")
-                  .eq("phone_number_id", metadata.phone_number_id)
-                  .single();
+                let account: { user_id: string } | null = null;
+                let accountError: any = null;
+
+                await retrySupabaseOperation(async () => {
+                  const result = await supabase
+                    .from("whatsapp_accounts")
+                    .select("user_id")
+                    .eq("phone_number_id", metadata.phone_number_id)
+                    .single();
+
+                  account = result.data;
+                  accountError = result.error;
+
+                  if (result.error && result.error.code !== "PGRST116") {
+                    // Throw specific errors to trigger retry, but not "Data not found" (PGRST116)
+                    throw result.error;
+                  }
+                }, "Lookup user account");
 
                 if (accountError || !account?.user_id) {
                   console.error(

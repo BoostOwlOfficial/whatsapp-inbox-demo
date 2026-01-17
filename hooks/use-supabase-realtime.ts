@@ -42,7 +42,6 @@ export function useSupabaseRealtime({
               event: "INSERT",
               schema: "public",
               table: "whatsapp_messages",
-              filter: `phone_number_id=eq.${phoneNumberId}`,
             },
             (payload) => {
               console.log("📨 Realtime INSERT:", {
@@ -59,7 +58,6 @@ export function useSupabaseRealtime({
               event: "UPDATE",
               schema: "public",
               table: "whatsapp_messages",
-              filter: `phone_number_id=eq.${phoneNumberId}`,
             },
             (payload) => {
               console.log("🔄 Realtime UPDATE:", {
@@ -79,7 +77,11 @@ export function useSupabaseRealtime({
             } else if (status === "CHANNEL_ERROR") {
               setConnected(false);
               setError("Connection error");
-              console.error("❌ Realtime channel error");
+              // @ts-ignore - channel may have error property on internal state
+              console.error(
+                "❌ Realtime channel error",
+                channel?.error || "Unknown error"
+              );
             } else if (status === "TIMED_OUT") {
               setConnected(false);
               setError("Connection timeout");

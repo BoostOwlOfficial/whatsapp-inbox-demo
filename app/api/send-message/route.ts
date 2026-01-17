@@ -115,8 +115,10 @@ export async function POST(request: NextRequest) {
     const messageId = data.messages?.[0]?.id;
 
     // Save sent message to Supabase
-    if (isSupabaseConfigured() && messageId) {
+    if (messageId) {
       try {
+        const { supabaseAdmin } = await import("@/lib/supabase-admin");
+
         const messageData = {
           id: messageId,
           phone_number_id: credentials.phoneNumberId,
@@ -135,7 +137,7 @@ export async function POST(request: NextRequest) {
           },
         };
 
-        const { error: dbError } = await supabase
+        const { error: dbError } = await supabaseAdmin
           .from("whatsapp_messages")
           .insert(messageData);
 
