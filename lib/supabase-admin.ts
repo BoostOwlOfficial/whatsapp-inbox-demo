@@ -20,8 +20,8 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
  */
 // Custom fetch implementation for serverless environments
 // Fixes "SocketError: other side closed" by disabling keep-alive
-const customFetch = (url: string, options: any) => {
-  return fetch(url, {
+const customFetch = (url: RequestInfo | URL, options: any) => {
+  return fetch(url as any, {
     ...options,
     headers: {
       ...options?.headers,
