@@ -18,10 +18,28 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
  * - app/api/... route handlers
  * - Server-side functions
  */
+// Custom fetch implementation for serverless environments
+// Fixes "SocketError: other side closed" by disabling keep-alive
+const customFetch = (url: string, options: any) => {
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      Connection: "close",
+    },
+    // @ts-ignore - undici/node-fetch support keepalive: false via agent or explicit option in some versions
+    // For Vercel/Node 18, forcing Connection header is key
+    keepalive: false,
+  });
+};
+
 export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
   auth: {
     autoRefreshToken: false,
     persistSession: false,
+  },
+  global: {
+    fetch: customFetch,
   },
 });
 

@@ -62,6 +62,20 @@ export async function POST(request: NextRequest) {
     // Log incoming webhook for debugging
     console.log("Webhook received:", JSON.stringify(body, null, 2));
 
+    // DEBUG: Log Environment Config (Masked)
+    const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const sbKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    console.log("🔧 Env Config Check:", {
+      NEXT_PUBLIC_SUPABASE_URL: sbUrl
+        ? sbUrl.substring(0, 15) + "..."
+        : "MISSING",
+      SUPABASE_SERVICE_ROLE_KEY: sbKey
+        ? sbKey.substring(0, 5) + "..."
+        : "MISSING",
+      WHATSAPP_APP_SECRET: APP_SECRET ? "SET" : "MISSING/EMPTY",
+      NodeEnv: process.env.NODE_ENV,
+    });
+
     // Process webhook data
     if (body.object === "whatsapp_business_account") {
       body.entry?.forEach((entry: any) => {
