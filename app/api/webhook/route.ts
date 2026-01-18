@@ -1,35 +1,36 @@
-import { type NextRequest, NextResponse } from "next/server"
-import crypto from "crypto"
+import { type NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 
-const VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || "whatsapp_webhook_token"
-const APP_SECRET = process.env.WHATSAPP_APP_SECRET || ""
+const VERIFY_TOKEN =
+  process.env.WEBHOOK_VERIFY_TOKEN || "whatsapp_webhook_token";
+const APP_SECRET = process.env.WHATSAPP_APP_SECRET || "";
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams
-  const mode = searchParams.get("hub.mode")
-  const token = searchParams.get("hub.verify_token")
-  const challenge = searchParams.get("hub.challenge")
+  const searchParams = request.nextUrl.searchParams;
+  const mode = searchParams.get("hub.mode");
+  const token = searchParams.get("hub.verify_token");
+  const challenge = searchParams.get("hub.challenge");
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verified")
+    console.log("Webhook verified");
     // Return plain text challenge value, not JSON
-    return new NextResponse(challenge, { status: 200 })
+    return new NextResponse(challenge, { status: 200 });
   }
 
-  return NextResponse.json({ error: "Invalid token" }, { status: 400 })
+  return NextResponse.json({ error: "Invalid token" }, { status: 400 });
 }
 
 export async function POST(request: NextRequest) {
   try {
     // Get the raw body for signature validation
-    const rawBody = await request.text()
+    const rawBody = await request.text();
 
     // Validate X-Hub-Signature-256
-    const signature = request.headers.get("X-Hub-Signature-256")
+    const signature = request.headers.get("X-Hub-Signature-256");
 
     if (!signature) {
-      console.error("Missing X-Hub-Signature-256 header")
-      return NextResponse.json({ error: "Missing signature" }, { status: 401 })
+      console.error("Missing X-Hub-Signature-256 header");
+      return NextResponse.json({ error: "Missing signature" }, { status: 401 });
     }
 
     // Verify the signature
@@ -37,44 +38,49 @@ export async function POST(request: NextRequest) {
       const expectedSignature = crypto
         .createHmac("sha256", APP_SECRET)
         .update(rawBody)
-        .digest("hex")
+        .digest("hex");
 
-      const signatureHash = signature.replace("sha256=", "")
+      const signatureHash = signature.replace("sha256=", "");
 
       if (signatureHash !== expectedSignature) {
-        console.error("Invalid signature")
-        return NextResponse.json({ error: "Invalid signature" }, { status: 401 })
+        console.error("Invalid signature");
+        return NextResponse.json(
+          { error: "Invalid signature" },
+          { status: 401 },
+        );
       }
     } else {
-      console.warn("WHATSAPP_APP_SECRET not configured - skipping signature validation")
+      console.warn(
+        "WHATSAPP_APP_SECRET not configured - skipping signature validation",
+      );
     }
 
     // Parse the validated body
-    const body = JSON.parse(rawBody)
+    const body = JSON.parse(rawBody);
 
     // Log incoming webhook for debugging
-    console.log("Webhook received:", JSON.stringify(body, null, 2))
+    console.log("Webhook received:", JSON.stringify(body, null, 2));
 
     // Process webhook data
     if (body.object === "whatsapp_business_account") {
       body.entry?.forEach((entry: any) => {
         entry.changes?.forEach(async (change: any) => {
           if (change.field === "messages") {
-            const messages = change.value?.messages || []
-            const contacts = change.value?.contacts || []
-            const metadata = change.value?.metadata || {}
+            const messages = change.value?.messages || [];
+            const contacts = change.value?.contacts || [];
+            const metadata = change.value?.metadata || {};
 
             // Create a map of contact info for quick lookup
             const contactMap = new Map(
               contacts.map((contact: any) => [
                 contact.wa_id,
-                contact.profile?.name || null
-              ])
-            )
+                contact.profile?.name || null,
+              ]),
+            );
 
             // Save each message to Supabase
             for (const message of messages) {
-              const contactName = contactMap.get(message.from)
+              const contactName = contactMap.get(message.from);
 
               console.log("New message received:", {
                 from: message.from,
@@ -82,17 +88,21 @@ export async function POST(request: NextRequest) {
                 text: message.text?.body,
                 type: message.type,
                 timestamp: message.timestamp,
-              })
+              });
 
               // Save to Supabase with retry logic
               try {
-                const { supabase, isSupabaseConfigured } = await import("@/lib/supabase")
-                const { retrySupabaseOperation } = await import("@/lib/retry-utils")
+                const { supabase, isSupabaseConfigured } =
+                  await import("@/lib/supabase");
+                const { retrySupabaseOperation } =
+                  await import("@/lib/retry-utils");
 
                 // Only save if Supabase is configured
                 if (!isSupabaseConfigured()) {
-                  console.warn("Supabase not configured, skipping message storage")
-                  continue
+                  console.warn(
+                    "Supabase not configured, skipping message storage",
+                  );
+                  continue;
                 }
 
                 const messageData = {
@@ -110,21 +120,56 @@ export async function POST(request: NextRequest) {
                     ...metadata,
                     raw_message: message,
                   },
-                }
+                };
 
                 // Retry the insert operation
                 await retrySupabaseOperation(
                   async () => {
                     const { error } = await supabase
                       .from("whatsapp_messages")
-                      .insert(messageData)
+                      .insert(messageData);
 
-                    if (error) throw error
+                    if (error) throw error;
                   },
-                  `Save message ${message.id.substring(0, 20)}`
-                )
+                  `Save message ${message.id.substring(0, 20)}`,
+                );
 
-                console.log("✅ Message saved to Supabase:", message.id)
+                console.log("✅ Message saved to Supabase:", message.id);
+
+                // Trigger AI auto-reply if enabled (direct function call - no HTTP overhead)
+                try {
+                  // Get user ID from phone_number_id
+                  const { data: accountData } = await supabase
+                    .from("whatsapp_accounts")
+                    .select("user_id")
+                    .eq("phone_number_id", metadata.phone_number_id)
+                    .single();
+
+                  if (accountData?.user_id) {
+                    // Import and call the function directly (don't await to avoid blocking webhook)
+                    import("@/lib/ai-auto-reply")
+                      .then(({ processAIAutoReply }) => {
+                        return processAIAutoReply({
+                          userId: accountData.user_id,
+                          userMessage: message.text?.body || "",
+                          fromNumber: message.from,
+                          phoneNumberId: metadata.phone_number_id,
+                          messageId: message.id,
+                        });
+                      })
+                      .then((result) => {
+                        // console.log("✅ AI auto-reply completed:", result);
+                      })
+                      .catch((err) => {
+                        console.error("❌ AI auto-reply failed:", err);
+                      });
+                  } else {
+                    // console.log("⚠️ No user_id found in accountData");
+                  }
+                } catch (error) {
+                  console.error("Error triggering AI auto-reply:", error);
+                  // Don't throw - webhook should succeed even if auto-reply fails
+                }
               } catch (error: any) {
                 // Log detailed error for debugging
                 console.error("Error saving message to Supabase:", {
@@ -132,13 +177,13 @@ export async function POST(request: NextRequest) {
                   details: error.stack || error.toString(),
                   hint: error.hint || "",
                   code: error.code || "",
-                })
+                });
               }
             }
           }
 
           if (change.field === "message_status") {
-            const statuses = change.value?.statuses || []
+            const statuses = change.value?.statuses || [];
 
             // Update message status in Supabase
             for (const status of statuses) {
@@ -146,16 +191,20 @@ export async function POST(request: NextRequest) {
                 messageId: status.id,
                 status: status.status,
                 timestamp: status.timestamp,
-              })
+              });
 
               try {
-                const { supabase, isSupabaseConfigured } = await import("@/lib/supabase")
-                const { retrySupabaseOperation } = await import("@/lib/retry-utils")
+                const { supabase, isSupabaseConfigured } =
+                  await import("@/lib/supabase");
+                const { retrySupabaseOperation } =
+                  await import("@/lib/retry-utils");
 
                 // Only update if Supabase is configured
                 if (!isSupabaseConfigured()) {
-                  console.warn("Supabase not configured, skipping status update")
-                  continue
+                  console.warn(
+                    "Supabase not configured, skipping status update",
+                  );
+                  continue;
                 }
 
                 // Retry the update operation
@@ -164,30 +213,30 @@ export async function POST(request: NextRequest) {
                     const { error } = await supabase
                       .from("whatsapp_messages")
                       .update({ status: status.status })
-                      .eq("id", status.id)
+                      .eq("id", status.id);
 
-                    if (error) throw error
+                    if (error) throw error;
                   },
-                  `Update status for ${status.id.substring(0, 20)}`
-                )
+                  `Update status for ${status.id.substring(0, 20)}`,
+                );
 
-                console.log("✅ Message status updated:", status.id)
+                console.log("✅ Message status updated:", status.id);
               } catch (error: any) {
                 console.error("Error updating message status:", {
                   message: error.message,
                   details: error.stack || error.toString(),
                   code: error.code || "",
-                })
+                });
               }
             }
           }
-        })
-      })
+        });
+      });
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Webhook processing error:", error)
-    return NextResponse.json({ error: "Processing failed" }, { status: 500 })
+    console.error("Webhook processing error:", error);
+    return NextResponse.json({ error: "Processing failed" }, { status: 500 });
   }
 }
